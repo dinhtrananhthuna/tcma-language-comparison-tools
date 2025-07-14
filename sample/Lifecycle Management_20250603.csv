@@ -1,0 +1,35 @@
+ContentId,Content
+60865a58-c232-4f71-b17d-e8975d6fe427,Product
+e33e6df7-16b2-4294-ae01-2711a6d8770a,Features
+2dfe09e8-d261-4e54-944e-634b933db264,Marketplace
+7aec66a2-a3ef-4c9b-beb0-8cc80e1c3357,Company
+603c9a39-2c79-4259-87ee-7f0a26e3bd42,"<span class="" px-5 py-2 mr-5 flex items-center border-b-2 border-transparent"">Home</span>"
+533bc953-cf97-479c-a539-fd35283fca36,"<span class="" px-5 py-2 pr-1  flex items-center text-white bg-secondary-contrast"">Lifecycle Management<span class=""mat-icon text-2xl text-transparent group-hover:text-current"">expand_less</span></span>"
+da662414-06c1-4422-9f26-6d2cbdeb2db7,Polarion ALM
+a217e5aa-ccdd-422d-82ba-2a4960b2b51d,Teamcenter PLM
+e25f1bc7-a9f0-451b-a38a-49c39726f487,"<span class=""px-5 py-2 pr-1 flex items-center border-b-2 border-transparent"">Mechanical Design<span class=""mat-icon text-2xl text-transparent group-hover:text-current"">expand_less</span></span>"
+825e4de2-3d91-4e3a-83b3-4c77242599bd,Designcenter - NX
+9e55d10f-0e05-48f0-a887-5a3812e6ca6a,Designcenter - Solid Edge
+13e8277c-048c-4e09-acea-1964bfe53aa3,"<span class=""px-5 py-2 pr-1 flex items-center border-b-2 border-transparent"">Simulation &  Test<span class=""mat-icon text-2xl text-transparent group-hover:text-current"">expand_less</span></span>"
+48cd9b76-3be6-4138-87aa-77fe4ef6aa80,"<span class=""  flex"">Simcenter - Fluids and Thermal </span>"
+a8051e2a-cffb-4b2e-8fe1-5fe48de96adb,"<span class="" flex"">Simcenter – Physical Testing  </span>"
+342c0c87-74d2-4286-82e0-45afaaafdfd4,"<span class="" flex"">Simcenter – Mechanical Simulation   </span>"
+c139fb8a-5c00-4930-850d-a5bd463dd62d,"<span class=""  flex"">Simcenter - Systems Simulation</span>"
+1a74499e-f9ef-4325-af03-89bdc3cb381f,"<span class=""px-5 py-2 pr-1 flex items-center border-b-2 border-transparent"">Manufacturing<span class=""mat-icon text-2xl text-transparent group-hover:text-current"">expand_less</span></span>"
+c2a99eb8-93e9-4336-9ad8-f586e727ac73,NX for Manufacturing
+b1bba227-95b0-4fcb-8a94-f3b228b860e7,"<span class=""  flex"">Opcenter  </span>"
+a3172589-3e70-43d4-aba6-ee3c9ec6c4c2,Teamcenter Manufacturing
+aad07618-342d-42ec-a900-e78a2ea0bbe3,"<span class=""px-5 py-2 pr-1 flex items-center border-b-2 border-transparent"">Low Code Development</span>"
+6975ecab-2acd-4cc0-aa18-cd67856188fa,<br><br><br> Contact us and accelerate your product development
+e42e8860-1b89-4250-9bbc-0e432d5cb6a5,"Achieve design excellence and streamline product development through an integrated, secure development ecosystem that enables multi-disciplinary collaboration and innovative, model-driven product lifecycle management so you can build faster with a focus on profit, quality, and sustainability."
+d2e2759a-b234-4c4b-8e93-4febdc53b6e0,Polarion (ALM) software
+c3cd4371-ac0c-4661-aae9-36e5c2b5b028,"<br> Connect teams and projects, and improve application development processes with a single, unified solution for requirements, coding, testing and release. Polarion ALM software can help you consolidate your real-time management information and drive project transparency. Adopt modern agile techniques at once—or incrementally—with out-of-the-box project templates that can be adjusted to your needs. <br><br>"
+8932b539-a87a-48bb-8f20-4884668897d3,Learn more about Polarion
+26c04375-de48-49d8-89e4-64cb0c25d8d9,Teamcenter (PLM) software
+21345b62-b4ab-4082-a6b1-9f3e54a30588,"<br> Product lifecycle management (PLM) enables companies to manage all of their product and process-related knowledge in a single secure but accessible system that can be used by multiple applications and teams across an organization. Siemens Teamcenter solutions are pre-configured with best practices to streamline and automate common PLM processes - not just for engineers, but also for decision-makers through the product lifecycle. <br><br>"
+f6c45364-cecc-4baa-b450-6bd5f4b10a56,Learn more about Teamcenter PLM
+44057263-4ceb-4a92-a838-868e50212514,<br> Optimize your lifecycle management  systems
+3787ffb6-aec3-40b6-825e-2ebc44557f62,"<br> <Partner Name> {consumer:Fcompanyname} is a Siemens Expert Partner.  We can provide the technical solution expertise and services needed to help companies improve quality and performance, reduce costs, and maximize the value of their investments.  Contact us today and let’s get started."
+82d67015-deae-43be-bd59-55d11f25c0b7,Contact us
+081753cb-da30-49f6-b663-a79f88e29e6b,Let's get started
+8c6892b4-6e59-4d4c-8eb7-4448c6708691,Email
