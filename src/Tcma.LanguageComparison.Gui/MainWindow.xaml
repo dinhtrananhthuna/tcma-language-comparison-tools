@@ -199,6 +199,14 @@
                                Margin="10,0,0,0"/>
                 </StackPanel>
             </StatusBarItem>
+            
+            <!-- Copyright -->
+            <StatusBarItem HorizontalAlignment="Right">
+                <TextBlock Text="By Vu Dinh - Simplify Dalat" 
+                           FontSize="10" 
+                           Foreground="#666666"
+                           FontStyle="Italic"/>
+            </StatusBarItem>
         </StatusBar>
         
     </Grid>
