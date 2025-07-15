@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Tcma.LanguageComparison.Core.Models;
@@ -56,6 +57,9 @@ public partial class MainWindow : Window
         
         // Load settings and initialize UI
         Task.Run(InitializeAsync);
+        
+        // Initialize UI visibility based on default tab (Single File Mode)
+        SingleFileResultsPanel.Visibility = Visibility.Visible;
         
         // Handle window closing
         Closing += MainWindow_Closing;
@@ -365,10 +369,22 @@ public partial class MainWindow : Window
 
     private void ProcessingModeTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Initialize page management service when switching to multi-page mode
-        if (ProcessingModeTabControl.SelectedItem == MultiPageTab && _pageManagementService == null)
+        // Adjust layout based on selected tab
+        if (ProcessingModeTabControl.SelectedItem == SingleFileTab)
         {
-            InitializePageManagementService();
+            // Show comparison results for single file mode
+            SingleFileResultsPanel.Visibility = Visibility.Visible;
+        }
+        else if (ProcessingModeTabControl.SelectedItem == MultiPageTab)
+        {
+            // Hide comparison results for multi-page mode (has its own results panel)
+            SingleFileResultsPanel.Visibility = Visibility.Collapsed;
+            
+            // Initialize page management service when switching to multi-page mode
+            if (_pageManagementService == null)
+            {
+                InitializePageManagementService();
+            }
         }
     }
 
@@ -619,9 +635,20 @@ public partial class MainWindow : Window
                 Tag = pageName
             };
 
-            // Create DataGrid for this page's results
+            // Create DataGrid for this page's results wrapped in ScrollViewer
             var dataGrid = CreateResultsDataGrid(pageResult);
-            newTab.Content = dataGrid;
+            var scrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                CanContentScroll = true,
+                Content = dataGrid
+            };
+            
+            // Create container with proper sizing
+            var container = new Grid();
+            container.Children.Add(scrollViewer);
+            newTab.Content = container;
 
             PageResultsTabControl.Items.Add(newTab);
             PageResultsTabControl.SelectedItem = newTab;
@@ -636,7 +663,18 @@ public partial class MainWindow : Window
         {
             // Update existing tab
             var dataGrid = CreateResultsDataGrid(pageResult);
-            existingTab.Content = dataGrid;
+            var scrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                CanContentScroll = true,
+                Content = dataGrid
+            };
+            
+            // Create container with proper sizing
+            var container = new Grid();
+            container.Children.Add(scrollViewer);
+            existingTab.Content = container;
             PageResultsTabControl.SelectedItem = existingTab;
         }
     }
@@ -651,18 +689,28 @@ public partial class MainWindow : Window
             IsReadOnly = true,
             GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            EnableRowVirtualization = true,
+            EnableColumnVirtualization = true,
+            CanUserResizeColumns = true,
+            CanUserSortColumns = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
         };
 
-        // Create columns (same as single file mode)
+        // Set attached properties for virtualization
+        VirtualizingPanel.SetIsVirtualizing(dataGrid, true);
+        VirtualizingPanel.SetVirtualizationMode(dataGrid, VirtualizationMode.Recycling);
+
+        // Create columns with consistent widths
         var columns = new[]
         {
-            new DataGridTextColumn { Header = "Target Line #", Binding = new System.Windows.Data.Binding("TargetLineNumber"), Width = 80 },
-            new DataGridTextColumn { Header = "Target Content", Binding = new System.Windows.Data.Binding("TargetContent"), Width = 300 },
-            new DataGridTextColumn { Header = "Ref. Line #", Binding = new System.Windows.Data.Binding("ReferenceLineNumber"), Width = 80 },
-            new DataGridTextColumn { Header = "Reference Content", Binding = new System.Windows.Data.Binding("ReferenceContent"), Width = 300 },
-            new DataGridTextColumn { Header = "Similarity Score", Binding = new System.Windows.Data.Binding("SimilarityScore") { StringFormat = "F3" }, Width = 120 },
-            new DataGridTextColumn { Header = "Quality", Binding = new System.Windows.Data.Binding("Quality"), Width = 80 },
+            new DataGridTextColumn { Header = "Target Line #", Binding = new System.Windows.Data.Binding("TargetLineNumber"), Width = new DataGridLength(80, DataGridLengthUnitType.Pixel) },
+            new DataGridTextColumn { Header = "Target Content", Binding = new System.Windows.Data.Binding("TargetContent"), Width = new DataGridLength(350, DataGridLengthUnitType.Pixel) },
+            new DataGridTextColumn { Header = "Ref. Line #", Binding = new System.Windows.Data.Binding("ReferenceLineNumber"), Width = new DataGridLength(80, DataGridLengthUnitType.Pixel) },
+            new DataGridTextColumn { Header = "Reference Content", Binding = new System.Windows.Data.Binding("ReferenceContent"), Width = new DataGridLength(350, DataGridLengthUnitType.Pixel) },
+            new DataGridTextColumn { Header = "Similarity Score", Binding = new System.Windows.Data.Binding("SimilarityScore") { StringFormat = "F3" }, Width = new DataGridLength(120, DataGridLengthUnitType.Pixel) },
+            new DataGridTextColumn { Header = "Quality", Binding = new System.Windows.Data.Binding("Quality"), Width = new DataGridLength(80, DataGridLengthUnitType.Pixel) },
             new DataGridTextColumn { Header = "Suggestion", Binding = new System.Windows.Data.Binding("Suggestion"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) }
         };
 
