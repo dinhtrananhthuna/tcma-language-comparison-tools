@@ -49,13 +49,22 @@ namespace Tcma.LanguageComparison.Core
         /// </summary>
         static async Task RunContentComparisonDemo(string apiKey)
         {
-            // Initialize services
+            // Load configuration
+            var configService = new ConfigurationService();
+            var config = configService.Configuration;
+
+            // Display current configuration
+            configService.DisplayConfiguration();
+
+            // Initialize services with configuration
             var embeddingService = new GeminiEmbeddingService(apiKey);
             var csvService = new CsvReaderService();
             var preprocessingService = new TextPreprocessingService();
-            var matchingService = new ContentMatchingService(0.5); // 50% similarity threshold
+            var matchingService = new ContentMatchingService(config.LanguageComparison.SimilarityThreshold);
             
-            var progress = new Progress<string>(message => Console.WriteLine($"[INFO] {message}"));
+            var progress = config.Output.ShowProgressMessages 
+                ? new Progress<string>(message => Console.WriteLine($"[INFO] {message}"))
+                : null;
 
             Console.WriteLine("✓ Khởi tạo thành công các services");
 
@@ -99,11 +108,16 @@ namespace Tcma.LanguageComparison.Core
             preprocessingService.ProcessContentRows(referenceRows);
             preprocessingService.ProcessContentRows(targetRows);
 
-            // Limit to first 10 rows for demo
-            var limitedRef = referenceRows.Take(10).ToList();
-            var limitedTarget = targetRows.Take(10).ToList();
+            // Apply demo row limit if configured
+            var limitedRef = config.LanguageComparison.DemoRowLimit > 0 
+                ? referenceRows.Take(config.LanguageComparison.DemoRowLimit).ToList() 
+                : referenceRows;
+            var limitedTarget = config.LanguageComparison.DemoRowLimit > 0 
+                ? targetRows.Take(config.LanguageComparison.DemoRowLimit).ToList() 
+                : targetRows;
 
-            Console.WriteLine($"✓ Xử lý {limitedRef.Count} reference và {limitedTarget.Count} target rows (giới hạn cho demo)");
+            Console.WriteLine($"✓ Xử lý {limitedRef.Count} reference và {limitedTarget.Count} target rows" +
+                             (config.LanguageComparison.DemoRowLimit > 0 ? " (giới hạn cho demo)" : ""));
 
             // Generate embeddings
             Console.WriteLine("\nTạo embeddings...");
@@ -114,10 +128,13 @@ namespace Tcma.LanguageComparison.Core
             Console.WriteLine("\nTìm matches...");
             var matchResults = await matchingService.FindMatchesAsync(limitedRef, limitedTarget, progress);
 
-            // Display results
-            DisplayMatchResults(matchResults);
+            // Display results if configured
+            if (config.Output.ShowDetailedResults)
+            {
+                DisplayMatchResults(matchResults);
+            }
 
-            // Generate statistics
+            // Generate and display statistics
             var stats = matchingService.GetMatchingStatistics(matchResults);
             DisplayStatistics(stats);
 
@@ -132,8 +149,12 @@ namespace Tcma.LanguageComparison.Core
         /// <summary>
         /// Simple demo with hardcoded text data
         /// </summary>
-        static async Task RunSimpleDemo(GeminiEmbeddingService embeddingService, IProgress<string> progress)
+        static async Task RunSimpleDemo(GeminiEmbeddingService embeddingService, IProgress<string>? progress)
         {
+            // Load configuration for simple demo
+            var configService = new ConfigurationService();
+            var config = configService.Configuration;
+
             // Create test data
             var referenceRows = new List<ContentRow>
             {
@@ -150,7 +171,7 @@ namespace Tcma.LanguageComparison.Core
             };
 
             var preprocessingService = new TextPreprocessingService();
-            var matchingService = new ContentMatchingService(0.5);
+            var matchingService = new ContentMatchingService(config.LanguageComparison.SimilarityThreshold);
 
             // Process content
             preprocessingService.ProcessContentRows(referenceRows);

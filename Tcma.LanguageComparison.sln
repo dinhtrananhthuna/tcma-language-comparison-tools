@@ -7,6 +7,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E1989E05-678
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tcma.LanguageComparison.Core", "src\Tcma.LanguageComparison.Core\Tcma.LanguageComparison.Core.csproj", "{626E377C-883A-4A5B-ACD7-8AC7DF3AD159}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tcma.LanguageComparison.Gui", "src\Tcma.LanguageComparison.Gui\Tcma.LanguageComparison.Gui.csproj", "{24E40292-2F80-4115-9499-A145A63CD41B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +22,13 @@ Global
 		{626E377C-883A-4A5B-ACD7-8AC7DF3AD159}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{626E377C-883A-4A5B-ACD7-8AC7DF3AD159}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{626E377C-883A-4A5B-ACD7-8AC7DF3AD159}.Release|Any CPU.Build.0 = Release|Any CPU
+		{24E40292-2F80-4115-9499-A145A63CD41B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{24E40292-2F80-4115-9499-A145A63CD41B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{24E40292-2F80-4115-9499-A145A63CD41B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{24E40292-2F80-4115-9499-A145A63CD41B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{626E377C-883A-4A5B-ACD7-8AC7DF3AD159} = {E1989E05-678C-45EC-AD17-4573E4813FA5}
+		{24E40292-2F80-4115-9499-A145A63CD41B} = {E1989E05-678C-45EC-AD17-4573E4813FA5}
 	EndGlobalSection
 EndGlobal
