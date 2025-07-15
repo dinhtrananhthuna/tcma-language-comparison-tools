@@ -129,11 +129,11 @@
                 <TabItem Header="📚 Multi-Page Mode" x:Name="MultiPageTab">
                     <!-- Multi-page content takes full available space -->
                     <Grid x:Name="MultiPageGrid" Margin="10" 
-                          MinHeight="400"
+                          Height="450"
                           VerticalAlignment="Stretch"
                           HorizontalAlignment="Stretch">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="400" MinWidth="300" MaxWidth="500"/>  <!-- Page Management Panel - resizable -->
+                            <ColumnDefinition Width="300" MinWidth="300" MaxWidth="450"/>  <!-- Page Management Panel - resizable -->
                             <ColumnDefinition Width="5"/>    <!-- Splitter -->
                             <ColumnDefinition Width="*"/>    <!-- Results Panel -->
                         </Grid.ColumnDefinitions>
@@ -293,18 +293,55 @@
                         <!-- Right Panel: Results -->
                         <GroupBox Grid.Column="2" Header="📊 Page Results"
                                   VerticalAlignment="Stretch">
-                            <TabControl x:Name="PageResultsTabControl"
-                                        ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                        ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                                <!-- Dynamic tabs will be added here for each processed page -->
-                                <TabItem Header="No pages processed yet" x:Name="EmptyResultsTab">
-                                    <TextBlock Text="Process a page from the left panel to see results here."
-                                             HorizontalAlignment="Center"
-                                             VerticalAlignment="Center"
-                                             FontStyle="Italic"
-                                             Foreground="#999"/>
-                                </TabItem>
-                            </TabControl>
+                            <DataGrid x:Name="MultiPageResultsDataGrid"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      IsReadOnly="True"
+                                      GridLinesVisibility="Horizontal"
+                                      EnableRowVirtualization="True"
+                                      EnableColumnVirtualization="True"
+                                      CanUserResizeColumns="True"
+                                      CanUserSortColumns="True"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="100"/>
+                                    <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="400">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Ref. Line #" Binding="{Binding ReferenceLineNumber}" Width="100"/>
+                                    <DataGridTextColumn Header="Reference Content" Binding="{Binding ReferenceContent}" Width="400">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="150"/>
+                                    <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="100"/>
+                                    <DataGridTextColumn Header="Suggestion" Binding="{Binding Suggestion}" Width="400">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow">
+                                        <Setter Property="Background" Value="{Binding RowBackground}"/>
+                                    </Style>
+                                </DataGrid.RowStyle>
+                            </DataGrid>
                         </GroupBox>
                     </Grid>
                 </TabItem>

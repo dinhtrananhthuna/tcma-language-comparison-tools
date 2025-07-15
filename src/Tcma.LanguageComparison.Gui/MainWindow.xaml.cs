@@ -38,6 +38,10 @@ public partial class MainWindow : Window
     public ObservableCollection<ComparisonResultViewModel> Results { get; } = new();
     public ObservableCollection<PageInfo> Pages { get; } = new();
 
+    // Thêm biến cache cho multi-page mode
+    private readonly Dictionary<string, List<ComparisonResultViewModel>> _multiPageResultsCache = new();
+    private PageInfo? _currentMultiPagePage = null;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -45,6 +49,7 @@ public partial class MainWindow : Window
         // Bind UI collections
         ResultsDataGrid.ItemsSource = Results;
         PageListView.ItemsSource = Pages;
+        MultiPageResultsDataGrid.ItemsSource = null;
         
         _settingsService = new SettingsService();
         
@@ -533,6 +538,15 @@ public partial class MainWindow : Window
 
             _pageManagementService.InitializeEmbeddingService(apiKey);
 
+            // Nếu đã có cache, chỉ cần load lại
+            if (_multiPageResultsCache.TryGetValue(pageInfo.PageName, out var cachedResults))
+            {
+                MultiPageResultsDataGrid.ItemsSource = cachedResults;
+                _currentMultiPagePage = pageInfo;
+                ShowStatus($"Loaded cached results for page: {pageInfo.PageName}");
+                return;
+            }
+
             // Process the page
             var progress = new Progress<string>(message => ShowProgress(message));
             var result = await _pageManagementService.ProcessPageAsync(pageInfo, progress);
@@ -540,10 +554,10 @@ public partial class MainWindow : Window
             if (result.IsSuccess)
             {
                 var pageResult = result.Data!;
-                
-                // Add/Update results tab
-                AddOrUpdateResultsTab(pageResult);
-                
+                var viewModels = pageResult.Results.Select(r => new ComparisonResultViewModel(r)).ToList();
+                _multiPageResultsCache[pageInfo.PageName] = viewModels;
+                MultiPageResultsDataGrid.ItemsSource = viewModels;
+                _currentMultiPagePage = pageInfo;
                 ShowStatus($"Successfully processed page: {pageInfo.PageName}");
             }
             else
@@ -564,18 +578,20 @@ public partial class MainWindow : Window
 
     private void PageListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Handle page selection if needed
         var selectedPage = PageListView.SelectedItem as PageInfo;
-        if (selectedPage != null && _pageManagementService?.HasCachedResult(selectedPage.PageName) == true)
+        if (selectedPage != null && _multiPageResultsCache.TryGetValue(selectedPage.PageName, out var cachedResults))
         {
-            // Switch to the results tab for this page
-            SwitchToResultsTab(selectedPage.PageName);
+            MultiPageResultsDataGrid.ItemsSource = cachedResults;
+            _currentMultiPagePage = selectedPage;
+            ShowStatus($"Loaded cached results for page: {selectedPage.PageName}");
         }
     }
 
     private void ClearCacheButton_Click(object sender, RoutedEventArgs e)
     {
         _pageManagementService?.ClearCache();
+        _multiPageResultsCache.Clear();
+        MultiPageResultsDataGrid.ItemsSource = null;
         
         // Update page statuses
         foreach (var page in Pages)
@@ -588,12 +604,12 @@ public partial class MainWindow : Window
         }
 
         // Clear results tabs except empty tab
-        while (PageResultsTabControl.Items.Count > 1)
-        {
-            PageResultsTabControl.Items.RemoveAt(1);
-        }
+        // while (PageResultsTabControl.Items.Count > 1) // This line is no longer needed
+        // {
+        //     PageResultsTabControl.Items.RemoveAt(1);
+        // }
         
-        PageResultsTabControl.SelectedItem = EmptyResultsTab;
+        // PageResultsTabControl.SelectedItem = EmptyResultsTab; // This line is no longer needed
         
         ShowStatus("Cache cleared");
     }
@@ -611,143 +627,7 @@ public partial class MainWindow : Window
         ShowStatus("Page statuses refreshed");
     }
 
-    private void AddOrUpdateResultsTab(PageMatchingResult pageResult)
-    {
-        var pageName = pageResult.PageInfo.PageName;
-        
-        // Check if tab already exists
-        TabItem? existingTab = null;
-        foreach (TabItem tab in PageResultsTabControl.Items)
-        {
-            if (tab.Tag?.ToString() == pageName)
-            {
-                existingTab = tab;
-                break;
-            }
-        }
-
-        if (existingTab == null)
-        {
-            // Create new tab
-            var newTab = new TabItem
-            {
-                Header = $"📄 {pageName}",
-                Tag = pageName
-            };
-
-            // Create DataGrid for this page's results wrapped in ScrollViewer
-            var dataGrid = CreateResultsDataGrid(pageResult);
-            var scrollViewer = new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                CanContentScroll = true,
-                Content = dataGrid
-            };
-            
-            // Create container with proper sizing
-            var container = new Grid();
-            container.Children.Add(scrollViewer);
-            newTab.Content = container;
-
-            PageResultsTabControl.Items.Add(newTab);
-            PageResultsTabControl.SelectedItem = newTab;
-            
-            // Hide empty tab if this is the first real tab
-            if (PageResultsTabControl.Items.Count == 2 && PageResultsTabControl.Items[0] == EmptyResultsTab)
-            {
-                EmptyResultsTab.Visibility = Visibility.Collapsed;
-            }
-        }
-        else
-        {
-            // Update existing tab
-            var dataGrid = CreateResultsDataGrid(pageResult);
-            var scrollViewer = new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                CanContentScroll = true,
-                Content = dataGrid
-            };
-            
-            // Create container with proper sizing
-            var container = new Grid();
-            container.Children.Add(scrollViewer);
-            existingTab.Content = container;
-            PageResultsTabControl.SelectedItem = existingTab;
-        }
-    }
-
-    private DataGrid CreateResultsDataGrid(PageMatchingResult pageResult)
-    {
-        var dataGrid = new DataGrid
-        {
-            AutoGenerateColumns = false,
-            CanUserAddRows = false,
-            CanUserDeleteRows = false,
-            IsReadOnly = true,
-            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            EnableRowVirtualization = true,
-            EnableColumnVirtualization = true,
-            CanUserResizeColumns = true,
-            CanUserSortColumns = true,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Stretch
-        };
-
-        // Set attached properties for virtualization
-        VirtualizingPanel.SetIsVirtualizing(dataGrid, true);
-        VirtualizingPanel.SetVirtualizationMode(dataGrid, VirtualizationMode.Recycling);
-
-        // Create columns with consistent widths
-        var columns = new[]
-        {
-            new DataGridTextColumn { Header = "Target Line #", Binding = new System.Windows.Data.Binding("TargetLineNumber"), Width = new DataGridLength(80, DataGridLengthUnitType.Pixel) },
-            new DataGridTextColumn { Header = "Target Content", Binding = new System.Windows.Data.Binding("TargetContent"), Width = new DataGridLength(350, DataGridLengthUnitType.Pixel) },
-            new DataGridTextColumn { Header = "Ref. Line #", Binding = new System.Windows.Data.Binding("ReferenceLineNumber"), Width = new DataGridLength(80, DataGridLengthUnitType.Pixel) },
-            new DataGridTextColumn { Header = "Reference Content", Binding = new System.Windows.Data.Binding("ReferenceContent"), Width = new DataGridLength(350, DataGridLengthUnitType.Pixel) },
-            new DataGridTextColumn { Header = "Similarity Score", Binding = new System.Windows.Data.Binding("SimilarityScore") { StringFormat = "F3" }, Width = new DataGridLength(120, DataGridLengthUnitType.Pixel) },
-            new DataGridTextColumn { Header = "Quality", Binding = new System.Windows.Data.Binding("Quality"), Width = new DataGridLength(80, DataGridLengthUnitType.Pixel) },
-            new DataGridTextColumn { Header = "Suggestion", Binding = new System.Windows.Data.Binding("Suggestion"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) }
-        };
-
-        foreach (var column in columns)
-        {
-            if (column.Header.ToString()!.Contains("Content"))
-            {
-                column.ElementStyle = new Style(typeof(TextBlock));
-                column.ElementStyle.Setters.Add(new Setter(TextBlock.TextWrappingProperty, TextWrapping.Wrap));
-                column.ElementStyle.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center));
-            }
-            dataGrid.Columns.Add(column);
-        }
-
-        // Set row style for coloring
-        var rowStyle = new Style(typeof(DataGridRow));
-        rowStyle.Setters.Add(new Setter(Control.BackgroundProperty, new System.Windows.Data.Binding("RowBackground")));
-        dataGrid.RowStyle = rowStyle;
-
-        // Convert results to view models
-        var viewModels = pageResult.Results.Select(r => new ComparisonResultViewModel(r)).ToList();
-        dataGrid.ItemsSource = viewModels;
-
-        return dataGrid;
-    }
-
-    private void SwitchToResultsTab(string pageName)
-    {
-        foreach (TabItem tab in PageResultsTabControl.Items)
-        {
-            if (tab.Tag?.ToString() == pageName)
-            {
-                PageResultsTabControl.SelectedItem = tab;
-                break;
-            }
-        }
-    }
+    // Xóa các hàm AddOrUpdateResultsTab, CreateResultsDataGrid, SwitchToResultsTab vì không còn dùng nữa
 
     #endregion
 }
