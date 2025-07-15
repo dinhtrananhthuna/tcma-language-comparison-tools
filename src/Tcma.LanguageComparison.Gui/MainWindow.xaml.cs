@@ -118,18 +118,18 @@ public partial class MainWindow : Window
             textPreprocessor.ProcessContentRows(referenceRows);
             textPreprocessor.ProcessContentRows(targetRows);
 
-            // Generate embeddings
-            ShowProgress("Generating embeddings for reference content...");
-            await embeddingService.GenerateEmbeddingsAsync(referenceRows, null);
-
-            ShowProgress("Generating embeddings for target content...");
-            await embeddingService.GenerateEmbeddingsAsync(targetRows, null);
-
             // Create progress reporter
             var progress = new Progress<string>(message => 
             {
                 Dispatcher.Invoke(() => ShowProgress(message));
             });
+
+            // Generate embeddings
+            ShowProgress("Generating embeddings for reference content...");
+            await embeddingService.GenerateEmbeddingsAsync(referenceRows, progress);
+
+            ShowProgress("Generating embeddings for target content...");
+            await embeddingService.GenerateEmbeddingsAsync(targetRows, progress);
 
             // Perform matching
             ShowProgress("Finding matches...");
@@ -271,7 +271,7 @@ public partial class MainWindow : Window
                                   $"High: {stats.HighQualityMatches} | " +
                                   $"Medium: {stats.MediumQualityMatches} | " +
                                   $"Low: {stats.LowQualityMatches} | " +
-                                  $"Match rate: {stats.MatchPercentage:P1}";
+                                  $"Match rate: {stats.MatchPercentage:F1}%";
     }
 }
 
