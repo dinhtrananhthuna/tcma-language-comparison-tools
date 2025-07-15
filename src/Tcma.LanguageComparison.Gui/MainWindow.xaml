@@ -133,6 +133,15 @@
                           AlternatingRowBackground="LightGray"
                           RowBackground="{Binding RowBackground}">
                     <DataGrid.Columns>
+                        <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="80"/>
+                        <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="300">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
                         <DataGridTextColumn Header="Ref. Line #" Binding="{Binding ReferenceLineNumber}" Width="80"/>
                         <DataGridTextColumn Header="Reference Content" Binding="{Binding ReferenceContent}" Width="300">
                             <DataGridTextColumn.ElementStyle>
@@ -142,16 +151,15 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Matched Content" Binding="{Binding MatchedContent}" Width="300">
+                        <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="120"/>
+                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="80"/>
+                        <DataGridTextColumn Header="Suggestion" Binding="{Binding Suggestion}" Width="*">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="TextWrapping" Value="Wrap"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="120"/>
-                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="80"/>
                     </DataGrid.Columns>
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">

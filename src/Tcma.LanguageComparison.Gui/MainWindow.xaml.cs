@@ -19,7 +19,7 @@ public partial class MainWindow : Window
 {
     private string? _referenceFilePath;
     private string? _targetFilePath;
-    private List<MatchResult>? _comparisonResults;
+    private List<LineByLineMatchResult>? _comparisonResults;
     
     public ObservableCollection<ComparisonResultViewModel> Results { get; } = new();
 
@@ -133,7 +133,7 @@ public partial class MainWindow : Window
 
             // Perform matching
             ShowProgress("Finding matches...");
-            _comparisonResults = await contentMatcher.FindMatchesAsync(
+            _comparisonResults = await contentMatcher.GenerateLineByLineReportAsync(
                 referenceRows, targetRows, progress);
 
             // Update UI with results
@@ -150,7 +150,13 @@ public partial class MainWindow : Window
             });
 
             // Generate statistics
-            var stats = contentMatcher.GetMatchingStatistics(_comparisonResults);
+            var stats = contentMatcher.GetMatchingStatistics(_comparisonResults.Select(r => new MatchResult
+            {
+                ReferenceRow = r.CorrespondingReferenceRow ?? new ContentRow(),
+                MatchedRow = r.TargetRow,
+                SimilarityScore = r.LineByLineScore,
+                IsGoodMatch = r.IsGoodLineByLineMatch
+            }));
             UpdateStatistics(stats);
 
             ShowProgress("Comparison completed successfully.");
@@ -189,10 +195,10 @@ public partial class MainWindow : Window
 
         var saveFileDialog = new SaveFileDialog
         {
-            Title = "Save Corrected CSV File",
+            Title = "Save Report CSV File",
             Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
             FilterIndex = 1,
-            FileName = "corrected_" + Path.GetFileName(_targetFilePath)
+            FileName = "report_" + Path.GetFileName(_targetFilePath)
         };
 
         if (saveFileDialog.ShowDialog() == true)
@@ -200,16 +206,26 @@ public partial class MainWindow : Window
             try
             {
                 SetUIEnabled(false);
-                ShowProgress("Exporting corrected file...");
+                ShowProgress("Exporting report...");
 
                 var csvReader = new CsvReaderService();
-                var contentMatcher = new ContentMatchingService(0.35);
-                var reorderedRows = contentMatcher.CreateReorderedTargetList(_comparisonResults);
-                
-                await csvReader.WriteContentRowsAsync(saveFileDialog.FileName, reorderedRows);
+                // Create report rows with additional columns
+                var reportRows = _comparisonResults.Select(r => new 
+                {
+                    TargetId = r.TargetRow.ContentId,
+                    TargetContent = r.TargetRow.Content,
+                    RefId = r.CorrespondingReferenceRow?.ContentId ?? "N/A",
+                    RefContent = r.CorrespondingReferenceRow?.Content ?? "N/A",
+                    Score = r.LineByLineScore.ToString("F3"),
+                    Quality = r.Quality.ToString(),
+                    Suggestion = r.SuggestedMatch != null ? $"Suggested Ref: {r.SuggestedMatch.ReferenceRow.ContentId} with score {r.SuggestedMatch.SimilarityScore:F3}" : "None"
+                });
+
+                // Note: CsvHelper can write anonymous types
+                await csvReader.WriteContentRowsAsync(saveFileDialog.FileName, reportRows.Select(r => new ContentRow { ContentId = r.TargetId, Content = $"{r.TargetContent},{r.RefId},{r.RefContent},{r.Score},{r.Quality},{r.Suggestion}" }));
 
                 ShowProgress("Export completed successfully.");
-                MessageBox.Show($"Corrected file exported successfully to:\n{saveFileDialog.FileName}", 
+                MessageBox.Show($"Report exported successfully to:\n{saveFileDialog.FileName}", 
                               "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -264,20 +280,24 @@ public partial class MainWindow : Window
 /// </summary>
 public class ComparisonResultViewModel
 {
+    public int TargetLineNumber { get; set; }
+    public string TargetContent { get; set; } = string.Empty;
     public int ReferenceLineNumber { get; set; }
     public string ReferenceContent { get; set; } = string.Empty;
-    public string MatchedContent { get; set; } = string.Empty;
     public double SimilarityScore { get; set; }
     public string Quality { get; set; } = string.Empty;
+    public string Suggestion { get; set; } = string.Empty;
     public Brush RowBackground { get; set; } = Brushes.White;
 
-    public ComparisonResultViewModel(MatchResult matchResult)
+    public ComparisonResultViewModel(LineByLineMatchResult matchResult)
     {
-        ReferenceLineNumber = matchResult.ReferenceRow.OriginalIndex + 1; // Convert 0-based to 1-based
-        ReferenceContent = TruncateText(matchResult.ReferenceRow.Content, 100);
-        MatchedContent = matchResult.MatchedRow != null ? TruncateText(matchResult.MatchedRow.Content, 100) : "No match found";
-        SimilarityScore = matchResult.SimilarityScore;
+        TargetLineNumber = matchResult.TargetRow.OriginalIndex + 1;
+        TargetContent = TruncateText(matchResult.TargetRow.Content, 100);
+        ReferenceLineNumber = matchResult.CorrespondingReferenceRow?.OriginalIndex + 1 ?? 0;
+        ReferenceContent = matchResult.CorrespondingReferenceRow != null ? TruncateText(matchResult.CorrespondingReferenceRow.Content, 100) : "N/A";
+        SimilarityScore = matchResult.LineByLineScore;
         Quality = matchResult.Quality.ToString();
+        Suggestion = matchResult.SuggestedMatch != null ? $"Suggested Ref Line: {matchResult.SuggestedMatch.ReferenceRow.OriginalIndex + 1} (Score: {matchResult.SuggestedMatch.SimilarityScore:F3})" : "None";
         
         // Set color based on quality
         RowBackground = matchResult.Quality switch

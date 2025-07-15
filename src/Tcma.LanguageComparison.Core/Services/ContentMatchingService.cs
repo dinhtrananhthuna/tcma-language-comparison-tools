@@ -204,6 +204,119 @@ namespace Tcma.LanguageComparison.Core.Services
                 AverageSimilarityScore = results.Any() ? results.Average(r => r.SimilarityScore) : 0
             };
         }
+
+        /// <summary>
+        /// Generates line-by-line report without reordering
+        /// </summary>
+        /// <param name="referenceRows">Reference content rows</param>
+        /// <param name="targetRows">Target content rows</param>
+        /// <param name="progressCallback">Optional progress callback</param>
+        /// <returns>List of line-by-line match results</returns>
+        public async Task<List<LineByLineMatchResult>> GenerateLineByLineReportAsync(
+            IEnumerable<ContentRow> referenceRows,
+            IEnumerable<ContentRow> targetRows,
+            IProgress<string>? progressCallback = null)
+        {
+            var refList = referenceRows.ToList();
+            var targetList = targetRows.ToList();
+            var results = new List<LineByLineMatchResult>();
+
+            if (refList.Count != targetList.Count)
+            {
+                progressCallback?.Report("Warning: Reference and target have different number of rows. Comparing up to minimum length.");
+            }
+
+            var minLength = Math.Min(refList.Count, targetList.Count);
+            var refWithEmbeddings = refList.Where(r => r.EmbeddingVector != null).ToList();
+            var processed = 0;
+
+            for (int i = 0; i < minLength; i++)
+            {
+                var targetRow = targetList[i];
+                var refRow = refList[i];
+
+                if (targetRow.EmbeddingVector == null || refRow.EmbeddingVector == null)
+                {
+                    results.Add(new LineByLineMatchResult
+                    {
+                        TargetRow = targetRow,
+                        CorrespondingReferenceRow = refRow,
+                        LineByLineScore = 0.0,
+                        IsGoodLineByLineMatch = false,
+                        SuggestedMatch = null
+                    });
+                    continue;
+                }
+
+                var lineScore = GeminiEmbeddingService.CalculateCosineSimilarity(
+                    refRow.EmbeddingVector,
+                    targetRow.EmbeddingVector);
+
+                bool isGood = lineScore >= _similarityThreshold;
+
+                MatchResult? suggestion = null;
+                if (!isGood)
+                {
+                    // Find best match from all references, without used tracking
+                    suggestion = await FindBestMatchAsync(targetRow, refWithEmbeddings, new HashSet<int>());
+                }
+
+                results.Add(new LineByLineMatchResult
+                {
+                    TargetRow = targetRow,
+                    CorrespondingReferenceRow = refRow,
+                    LineByLineScore = lineScore,
+                    IsGoodLineByLineMatch = isGood,
+                    SuggestedMatch = suggestion
+                });
+
+                processed++;
+                if (processed % 10 == 0 || processed == minLength)
+                {
+                    progressCallback?.Report($"Processed {processed}/{minLength} rows...");
+                }
+            }
+
+            // Handle extra rows if lengths differ
+            if (targetList.Count > refList.Count)
+            {
+                for (int i = minLength; i < targetList.Count; i++)
+                {
+                    results.Add(new LineByLineMatchResult
+                    {
+                        TargetRow = targetList[i],
+                        CorrespondingReferenceRow = null,
+                        LineByLineScore = 0.0,
+                        IsGoodLineByLineMatch = false,
+                        SuggestedMatch = await FindBestMatchAsync(targetList[i], refWithEmbeddings, new HashSet<int>())
+                    });
+                }
+            }
+
+            progressCallback?.Report("Line-by-line report generation completed.");
+
+            return results;
+        }
+
+    }
+
+    /// <summary>
+    /// Represents line-by-line match result with suggestion
+    /// </summary>
+    public record LineByLineMatchResult
+    {
+        public ContentRow TargetRow { get; init; } = null!;
+        public ContentRow? CorrespondingReferenceRow { get; init; }
+        public double LineByLineScore { get; init; }
+        public bool IsGoodLineByLineMatch { get; init; }
+        public MatchResult? SuggestedMatch { get; init; }
+        public MatchQuality Quality => LineByLineScore switch
+        {
+            >= 0.8 => MatchQuality.High,
+            >= 0.6 => MatchQuality.Medium,
+            >= 0.4 => MatchQuality.Low,
+            _ => MatchQuality.Poor
+        };
     }
 
     /// <summary>
