@@ -213,48 +213,131 @@
                                           VirtualizingPanel.IsVirtualizing="True"
                                           VirtualizingPanel.VirtualizationMode="Recycling"
                                           SelectionChanged="PageListView_SelectionChanged">
+                                    <ListView.Resources>
+                                        <!-- Custom styling for selected items -->
+                                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#E3F2FD"/>
+                                        <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#BBDEFB"/>
+                                        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#BBDEFB"/>
+                                        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="Black"/>
+                                    </ListView.Resources>
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Style.Triggers>
+                                                <!-- Selected item styling -->
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#E3F2FD"/>
+                                                    <Setter Property="BorderBrush" Value="#2196F3"/>
+                                                    <Setter Property="BorderThickness" Value="2,0,2,0"/>
+                                                </Trigger>
+                                                <!-- Hover effect -->
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#F5F5F5"/>
+                                                </Trigger>
+                                                <!-- Selected + Hover -->
+                                                <MultiTrigger>
+                                                    <MultiTrigger.Conditions>
+                                                        <Condition Property="IsSelected" Value="True"/>
+                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                    </MultiTrigger.Conditions>
+                                                    <Setter Property="Background" Value="#BBDEFB"/>
+                                                </MultiTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
                                     <ListView.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid Margin="2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="30"/>  <!-- Status Icon -->
-                                                    <ColumnDefinition Width="*"/>   <!-- Page Name -->
-                                                    <ColumnDefinition Width="Auto"/> <!-- Action Button -->
-                                                </Grid.ColumnDefinitions>
+                                            <Border Margin="2" Padding="5" Background="Transparent" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="30"/>   <!-- Status Icon -->
+                                                        <ColumnDefinition Width="*"/>    <!-- Page Info -->
+                                                        <ColumnDefinition Width="70"/>   <!-- Process Button (Fixed Width) -->
+                                                    </Grid.ColumnDefinitions>
 
-                                                <!-- Status Icon -->
-                                                <TextBlock Grid.Column="0" 
-                                                         Text="{Binding StatusIcon}" 
-                                                         FontSize="16"
-                                                         HorizontalAlignment="Center"
-                                                         VerticalAlignment="Center"/>
+                                                    <!-- Status Icon -->
+                                                    <TextBlock Grid.Column="0" 
+                                                             Text="{Binding StatusIcon}" 
+                                                             FontSize="16"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"/>
 
-                                                <!-- Page Info -->
-                                                <StackPanel Grid.Column="1" Margin="5,0">
-                                                    <TextBlock Text="{Binding PageName}" 
-                                                             FontWeight="Bold"/>
-                                                    <TextBlock Text="{Binding DisplayName}" 
-                                                             FontSize="10"
-                                                             Foreground="#666"
-                                                             TextTrimming="CharacterEllipsis"/>
-                                                    <ProgressBar Height="4" 
-                                                               Value="{Binding Progress}"
-                                                               Visibility="{Binding IsProcessing, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                                               Margin="0,2,0,0"/>
-                                                </StackPanel>
+                                                    <!-- Page Info -->
+                                                    <StackPanel Grid.Column="1" Margin="5,2,10,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding PageName}" 
+                                                                 FontWeight="Bold"
+                                                                 TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding DisplayName}" 
+                                                                 FontSize="10"
+                                                                 Foreground="#666"
+                                                                 TextTrimming="CharacterEllipsis"/>
+                                                        <ProgressBar Height="3" 
+                                                                   Value="{Binding Progress}"
+                                                                   Visibility="{Binding IsProcessing, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                   Margin="0,2,0,0"/>
+                                                    </StackPanel>
 
-                                                <!-- Action Button -->
-                                                <Button Grid.Column="2" 
-                                                      Content="Process"
-                                                      Width="60"
-                                                      Height="25"
-                                                      FontSize="10"
-                                                      Background="#4CAF50"
-                                                      Foreground="White"
-                                                      IsEnabled="{Binding CanProcess}"
-                                                      Click="ProcessPageButton_Click"
-                                                      Tag="{Binding}"/>
-                                            </Grid>
+                                                    <!-- Process Button Area -->
+                                                    <Grid Grid.Column="2">
+                                                        <!-- Process Button - Only show when CanProcess -->
+                                                        <Button Content="Process"
+                                                              Width="65"
+                                                              Height="28"
+                                                              FontSize="10"
+                                                              Background="#4CAF50"
+                                                              Foreground="White"
+                                                              BorderThickness="1"
+                                                              BorderBrush="#45A049"
+                                                              HorizontalAlignment="Right"
+                                                              VerticalAlignment="Center"
+                                                              IsEnabled="{Binding CanProcess}"
+                                                              Click="ProcessPageButton_Click"
+                                                              Tag="{Binding}">
+                                                            <Button.Style>
+                                                                <Style TargetType="Button">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Style.Triggers>
+                                                                        <!-- Hide button when Status is Completed or Cached -->
+                                                                        <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="Cached">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Button.Style>
+                                                        </Button>
+
+                                                        <!-- Status Text - Show when processed -->
+                                                        <TextBlock Text="✓ Processed" 
+                                                                 FontSize="9"
+                                                                 Foreground="#4CAF50"
+                                                                 FontWeight="Bold"
+                                                                 HorizontalAlignment="Right"
+                                                                 VerticalAlignment="Center"
+                                                                 Margin="0,0,5,0">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <!-- Show text when Status is Completed or Cached -->
+                                                                        <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="Cached">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+                                                </Grid>
+                                            </Border>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>

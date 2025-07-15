@@ -600,16 +600,14 @@ public partial class MainWindow : Window
             {
                 page.Status = PageStatus.Ready;
                 page.IsResultsCached = false;
+                page.Progress = 0;
+                page.ErrorMessage = null;
             }
         }
 
-        // Clear results tabs except empty tab
-        // while (PageResultsTabControl.Items.Count > 1) // This line is no longer needed
-        // {
-        //     PageResultsTabControl.Items.RemoveAt(1);
-        // }
-        
-        // PageResultsTabControl.SelectedItem = EmptyResultsTab; // This line is no longer needed
+        // Force refresh the ListView to update UI
+        PageListView.ItemsSource = null;
+        PageListView.ItemsSource = Pages;
         
         ShowStatus("Cache cleared");
     }

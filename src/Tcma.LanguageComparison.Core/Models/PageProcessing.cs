@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace Tcma.LanguageComparison.Core.Models
 {
@@ -37,8 +39,14 @@ namespace Tcma.LanguageComparison.Core.Models
     /// <summary>
     /// Information about a page pair in multi-page processing
     /// </summary>
-    public class PageInfo
+    public class PageInfo : INotifyPropertyChanged
     {
+        private PageStatus _status = PageStatus.Ready;
+        private bool _isResultsCached = false;
+        private int _progress = 0;
+        private string? _errorMessage;
+        private DateTime? _lastProcessed;
+
         /// <summary>
         /// Name of the page (extracted from filename pattern)
         /// </summary>
@@ -57,27 +65,85 @@ namespace Tcma.LanguageComparison.Core.Models
         /// <summary>
         /// Current status of this page
         /// </summary>
-        public PageStatus Status { get; set; } = PageStatus.Ready;
+        public PageStatus Status 
+        { 
+            get => _status;
+            set 
+            {
+                if (_status != value)
+                {
+                    _status = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(StatusIcon));
+                    OnPropertyChanged(nameof(CanProcess));
+                    OnPropertyChanged(nameof(IsProcessing));
+                }
+            }
+        }
         
         /// <summary>
         /// When this page was last processed
         /// </summary>
-        public DateTime? LastProcessed { get; set; }
+        public DateTime? LastProcessed 
+        { 
+            get => _lastProcessed;
+            set 
+            {
+                if (_lastProcessed != value)
+                {
+                    _lastProcessed = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         
         /// <summary>
         /// Error message if status is Error
         /// </summary>
-        public string? ErrorMessage { get; set; }
+        public string? ErrorMessage 
+        { 
+            get => _errorMessage;
+            set 
+            {
+                if (_errorMessage != value)
+                {
+                    _errorMessage = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         
         /// <summary>
         /// Whether results are currently cached in memory
         /// </summary>
-        public bool IsResultsCached { get; set; }
+        public bool IsResultsCached 
+        { 
+            get => _isResultsCached;
+            set 
+            {
+                if (_isResultsCached != value)
+                {
+                    _isResultsCached = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         
         /// <summary>
         /// Processing progress (0-100)
         /// </summary>
-        public int Progress { get; set; }
+        public int Progress 
+        { 
+            get => _progress;
+            set 
+            {
+                if (_progress != value)
+                {
+                    _progress = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         
         /// <summary>
         /// Gets the display name for this page
@@ -106,6 +172,13 @@ namespace Tcma.LanguageComparison.Core.Models
         /// Whether this page is currently being processed (for UI binding)
         /// </summary>
         public bool IsProcessing => Status == PageStatus.Processing;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 
     /// <summary>
