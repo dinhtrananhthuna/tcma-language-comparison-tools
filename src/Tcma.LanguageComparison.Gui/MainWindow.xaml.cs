@@ -9,6 +9,7 @@ using System.Windows.Media;
 using Microsoft.Win32;
 using Tcma.LanguageComparison.Core.Models;
 using Tcma.LanguageComparison.Core.Services;
+using Tcma.LanguageComparison.Gui.Services;
 
 namespace Tcma.LanguageComparison.Gui;
 
@@ -20,6 +21,7 @@ public partial class MainWindow : Window
     private string? _referenceFilePath;
     private string? _targetFilePath;
     private List<LineByLineMatchResult>? _comparisonResults;
+    private readonly SettingsService _settingsService;
     
     public ObservableCollection<ComparisonResultViewModel> Results { get; } = new();
 
@@ -27,6 +29,46 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         ResultsDataGrid.ItemsSource = Results;
+        
+        _settingsService = new SettingsService();
+        
+        // Load settings and initialize UI
+        _ = InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            await _settingsService.LoadSettingsAsync();
+            
+            // Settings loaded successfully
+            ShowStatus("Settings loaded successfully");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to load settings: {ex.Message}");
+        }
+    }
+
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var settingsWindow = new SettingsWindow(_settingsService)
+            {
+                Owner = this
+            };
+
+            if (settingsWindow.ShowDialog() == true && settingsWindow.SettingsChanged)
+            {
+                ShowStatus("Settings saved successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to open settings: {ex.Message}");
+        }
     }
 
     private void BrowseReferenceButton_Click(object sender, RoutedEventArgs e)
@@ -65,14 +107,10 @@ public partial class MainWindow : Window
 
     private void UpdateCompareButtonState()
     {
+        var apiKey = _settingsService.ApiKey;
         CompareButton.IsEnabled = !string.IsNullOrEmpty(_referenceFilePath) 
                                  && !string.IsNullOrEmpty(_targetFilePath) 
-                                 && !string.IsNullOrEmpty(ApiKeyPasswordBox.Password);
-    }
-
-    private void ApiKeyPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
-    {
-        UpdateCompareButtonState();
+                                 && !string.IsNullOrEmpty(apiKey);
     }
 
     private async void CompareButton_Click(object sender, RoutedEventArgs e)
@@ -84,9 +122,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (string.IsNullOrEmpty(ApiKeyPasswordBox.Password))
+        var apiKey = _settingsService.ApiKey;
+        if (string.IsNullOrEmpty(apiKey))
         {
-            MessageBox.Show("Please enter your Gemini API key.", "Missing API Key", 
+            MessageBox.Show("Please configure your Gemini API key in Settings.", "Missing API Key", 
                           MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -101,8 +140,8 @@ public partial class MainWindow : Window
             // Initialize services
             var csvReader = new CsvReaderService();
             var textPreprocessor = new TextPreprocessingService();
-            var embeddingService = new GeminiEmbeddingService(ApiKeyPasswordBox.Password);
-            var contentMatcher = new ContentMatchingService(0.35); // Use lower threshold for cross-language
+            var embeddingService = new GeminiEmbeddingService(apiKey);
+            var contentMatcher = new ContentMatchingService(_settingsService.SimilarityThreshold); // Use threshold from settings
 
             // Load CSV files
             ShowProgress("Loading reference file...");
@@ -246,10 +285,9 @@ public partial class MainWindow : Window
     {
         BrowseReferenceButton.IsEnabled = enabled;
         BrowseTargetButton.IsEnabled = enabled;
-        ApiKeyPasswordBox.IsEnabled = enabled;
         CompareButton.IsEnabled = enabled && !string.IsNullOrEmpty(_referenceFilePath) 
                                            && !string.IsNullOrEmpty(_targetFilePath) 
-                                           && !string.IsNullOrEmpty(ApiKeyPasswordBox.Password);
+                                           && !string.IsNullOrEmpty(_settingsService.ApiKey);
     }
 
     private void ShowProgress(string message)
@@ -262,6 +300,17 @@ public partial class MainWindow : Window
     {
         ProgressBar.Visibility = Visibility.Collapsed;
         StatusTextBlock.Text = "Ready";
+    }
+
+    private void ShowStatus(string message)
+    {
+        StatusTextBlock.Text = message;
+    }
+
+    private void ShowError(string message)
+    {
+        StatusTextBlock.Text = $"Error: {message}";
+        MessageBox.Show(message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void UpdateStatistics(MatchingStatistics stats)
