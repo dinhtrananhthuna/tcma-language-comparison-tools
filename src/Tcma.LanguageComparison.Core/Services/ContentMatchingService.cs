@@ -396,37 +396,4 @@ namespace Tcma.LanguageComparison.Core.Services
         }
     }
 
-    /// <summary>
-    /// Represents line-by-line match result with suggestion
-    /// </summary>
-    public record LineByLineMatchResult
-    {
-        public ContentRow TargetRow { get; init; } = null!;
-        public ContentRow? CorrespondingReferenceRow { get; init; }
-        public double LineByLineScore { get; init; }
-        public bool IsGoodLineByLineMatch { get; init; }
-        public MatchResult? SuggestedMatch { get; init; }
-        public MatchQuality Quality => LineByLineScore switch
-        {
-            >= 0.8 => MatchQuality.High,
-            >= 0.6 => MatchQuality.Medium,
-            >= 0.4 => MatchQuality.Low,
-            _ => MatchQuality.Poor
-        };
-    }
-
-    /// <summary>
-    /// Statistics about matching results
-    /// </summary>
-    public record MatchingStatistics
-    {
-        public int TotalReferenceRows { get; init; }
-        public int GoodMatches { get; init; }
-        public int HighQualityMatches { get; init; }
-        public int MediumQualityMatches { get; init; }
-        public int LowQualityMatches { get; init; }
-        public int PoorQualityMatches { get; init; }
-        public double MatchPercentage { get; init; }
-        public double AverageSimilarityScore { get; init; }
-    }
 } 

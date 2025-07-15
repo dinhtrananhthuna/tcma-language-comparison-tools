@@ -8,6 +8,10 @@
         Title="TCMA Language Comparison Tool" Height="700" Width="1200"
         WindowStartupLocation="CenterScreen">
     
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Window.Resources>
+    
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -24,98 +28,269 @@
                    HorizontalAlignment="Center" 
                    Margin="0,0,0,20"/>
         
-        <!-- Control Panel -->
+        <!-- Control Panel with Tabs -->
         <Border Grid.Row="1" 
                 Background="White" 
                 Padding="15"
                 BorderBrush="#E0E0E0" 
                 BorderThickness="0,0,0,1">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="15"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- File Selection -->
-                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
-                    <TextBlock Text="Reference File (English)" FontWeight="Bold" Margin="0,0,0,5"/>
-                    <Grid>
+            <TabControl x:Name="ProcessingModeTabControl" SelectionChanged="ProcessingModeTabControl_SelectionChanged">
+                <!-- Single File Tab -->
+                <TabItem Header="📄 Single File Mode" x:Name="SingleFileTab">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="15"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="ReferenceFileTextBox" 
-                                 Grid.Column="0"
-                                 IsReadOnly="True" 
-                                 Background="#F8F8F8"
-                                 Margin="0,0,5,0"/>
-                        <Button x:Name="BrowseReferenceButton" 
-                                Grid.Column="1"
-                                Content="Browse" 
-                                Width="70"
-                                Click="BrowseReferenceButton_Click"/>
-                    </Grid>
-                </StackPanel>
-
-                <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
-                    <TextBlock Text="Target File (Other Language)" FontWeight="Bold" Margin="0,0,0,5"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="TargetFileTextBox" 
-                                 Grid.Column="0"
-                                 IsReadOnly="True" 
-                                 Background="#F8F8F8"
-                                 Margin="0,0,5,0"/>
-                        <Button x:Name="BrowseTargetButton" 
-                                Grid.Column="1"
-                                Content="Browse" 
-                                Width="70"
-                                Click="BrowseTargetButton_Click"/>
-                    </Grid>
-                </StackPanel>
 
-                <!-- Action Buttons -->
-                <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" 
-                            Orientation="Horizontal" 
-                            HorizontalAlignment="Center">
-                    <Button x:Name="SettingsButton"
-                            Content="⚙️ Settings"
-                            Width="100"
-                            Height="35"
-                            Background="#607D8B"
-                            Foreground="White"
-                            BorderBrush="#546E7A"
-                            Margin="0,0,5,0"
-                            Click="SettingsButton_Click"/>
-                    <Button x:Name="CompareButton"
-                            Content="🔍 Compare"
-                            Width="100"
-                            Height="35"
-                            Background="#4CAF50"
-                            Foreground="White"
-                            BorderBrush="#45A049"
-                            Margin="5,0,5,0"
-                            Click="CompareButton_Click"/>
-                    <Button x:Name="ExportButton"
-                            Content="💾 Export"
-                            Width="100"
-                            Height="35"
-                            Background="#FF9800"
-                            Foreground="White"
-                            BorderBrush="#F57C00"
-                            Margin="5,0,0,0"
-                            IsEnabled="False"
-                            Click="ExportButton_Click"/>
-                </StackPanel>
-            </Grid>
+                        <!-- File Selection -->
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Text="Reference File (English)" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ReferenceFileTextBox" 
+                                         Grid.Column="0"
+                                         IsReadOnly="True" 
+                                         Background="#F8F8F8"
+                                         Margin="0,0,5,0"/>
+                                <Button x:Name="BrowseReferenceButton" 
+                                        Grid.Column="1"
+                                        Content="Browse" 
+                                        Width="70"
+                                        Click="BrowseReferenceButton_Click"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
+                            <TextBlock Text="Target File (Other Language)" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="TargetFileTextBox" 
+                                         Grid.Column="0"
+                                         IsReadOnly="True" 
+                                         Background="#F8F8F8"
+                                         Margin="0,0,5,0"/>
+                                <Button x:Name="BrowseTargetButton" 
+                                        Grid.Column="1"
+                                        Content="Browse" 
+                                        Width="70"
+                                        Click="BrowseTargetButton_Click"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Action Buttons -->
+                        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" 
+                                    Orientation="Horizontal" 
+                                    HorizontalAlignment="Center">
+                            <Button x:Name="SettingsButton"
+                                    Content="⚙️ Settings"
+                                    Width="100"
+                                    Height="35"
+                                    Background="#607D8B"
+                                    Foreground="White"
+                                    BorderBrush="#546E7A"
+                                    Margin="0,0,5,0"
+                                    Click="SettingsButton_Click"/>
+                            <Button x:Name="CompareButton"
+                                    Content="🔍 Compare"
+                                    Width="100"
+                                    Height="35"
+                                    Background="#4CAF50"
+                                    Foreground="White"
+                                    BorderBrush="#45A049"
+                                    Margin="5,0,5,0"
+                                    Click="CompareButton_Click"/>
+                            <Button x:Name="ExportButton"
+                                    Content="💾 Export"
+                                    Width="100"
+                                    Height="35"
+                                    Background="#FF9800"
+                                    Foreground="White"
+                                    BorderBrush="#F57C00"
+                                    Margin="5,0,0,0"
+                                    IsEnabled="False"
+                                    Click="ExportButton_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+
+                <!-- Multi-Page Tab -->
+                <TabItem Header="📚 Multi-Page Mode" x:Name="MultiPageTab">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="350"/>  <!-- Page Management Panel -->
+                            <ColumnDefinition Width="5"/>    <!-- Splitter -->
+                            <ColumnDefinition Width="*"/>    <!-- Results Panel -->
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left Panel: Page Management -->
+                        <GroupBox Grid.Column="0" Header="📁 Page Management">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>  <!-- Upload Section -->
+                                    <RowDefinition Height="Auto"/>  <!-- Status -->
+                                    <RowDefinition Height="*"/>     <!-- Page List -->
+                                    <RowDefinition Height="Auto"/>  <!-- Controls -->
+                                </Grid.RowDefinitions>
+
+                                <!-- ZIP Upload Section -->
+                                <StackPanel Grid.Row="0" Margin="5">
+                                    <TextBlock Text="Upload ZIP Files" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <Grid Margin="0,0,0,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="ReferenceZipTextBox" 
+                                                 Grid.Column="0"
+                                                 IsReadOnly="True" 
+                                                 Background="#F8F8F8"
+                                                 Margin="0,0,5,0"
+                                                 Text="Reference ZIP..."/>
+                                        <Button x:Name="BrowseReferenceZipButton" 
+                                                Grid.Column="1"
+                                                Content="Browse" 
+                                                Width="60"
+                                                Click="BrowseReferenceZipButton_Click"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="TargetZipTextBox" 
+                                                 Grid.Column="0"
+                                                 IsReadOnly="True" 
+                                                 Background="#F8F8F8"
+                                                 Margin="0,0,5,0"
+                                                 Text="Target ZIP..."/>
+                                        <Button x:Name="BrowseTargetZipButton" 
+                                                Grid.Column="1"
+                                                Content="Browse" 
+                                                Width="60"
+                                                Click="BrowseTargetZipButton_Click"/>
+                                    </Grid>
+                                    <Button x:Name="LoadPagesButton"
+                                            Content="🔄 Load Pages"
+                                            HorizontalAlignment="Stretch"
+                                            Background="#2196F3"
+                                            Foreground="White"
+                                            Height="30"
+                                            IsEnabled="False"
+                                            Click="LoadPagesButton_Click"/>
+                                </StackPanel>
+
+                                <!-- Status Section -->
+                                <TextBlock Grid.Row="1" 
+                                           x:Name="PagesStatusText" 
+                                           Margin="5"
+                                           Text="Select ZIP files to begin..."
+                                           FontStyle="Italic"
+                                           Foreground="#666"/>
+
+                                <!-- Page List -->
+                                <ListView Grid.Row="2" 
+                                          x:Name="PageListView" 
+                                          Margin="5"
+                                          SelectionChanged="PageListView_SelectionChanged">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="30"/>  <!-- Status Icon -->
+                                                    <ColumnDefinition Width="*"/>   <!-- Page Name -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Action Button -->
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Status Icon -->
+                                                <TextBlock Grid.Column="0" 
+                                                         Text="{Binding StatusIcon}" 
+                                                         FontSize="16"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center"/>
+
+                                                <!-- Page Info -->
+                                                <StackPanel Grid.Column="1" Margin="5,0">
+                                                    <TextBlock Text="{Binding PageName}" 
+                                                             FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding DisplayName}" 
+                                                             FontSize="10"
+                                                             Foreground="#666"
+                                                             TextTrimming="CharacterEllipsis"/>
+                                                    <ProgressBar Height="4" 
+                                                               Value="{Binding Progress}"
+                                                               Visibility="{Binding IsProcessing, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                               Margin="0,2,0,0"/>
+                                                </StackPanel>
+
+                                                <!-- Action Button -->
+                                                <Button Grid.Column="2" 
+                                                      Content="Process"
+                                                      Width="60"
+                                                      Height="25"
+                                                      FontSize="10"
+                                                      Background="#4CAF50"
+                                                      Foreground="White"
+                                                      IsEnabled="{Binding CanProcess}"
+                                                      Click="ProcessPageButton_Click"
+                                                      Tag="{Binding}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+
+                                <!-- Control Buttons -->
+                                <StackPanel Grid.Row="3" Margin="5" Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Button x:Name="ClearCacheButton" 
+                                            Content="🗑️ Clear Cache"
+                                            Width="90"
+                                            Height="25"
+                                            FontSize="10"
+                                            Background="#FF5722"
+                                            Foreground="White"
+                                            Margin="0,0,5,0"
+                                            Click="ClearCacheButton_Click"/>
+                                    <Button x:Name="RefreshPagesButton" 
+                                            Content="🔄 Refresh"
+                                            Width="70"
+                                            Height="25"
+                                            FontSize="10"
+                                            Background="#607D8B"
+                                            Foreground="White"
+                                            Click="RefreshPagesButton_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </GroupBox>
+
+                        <GridSplitter Grid.Column="1" Width="5" Background="#E0E0E0"/>
+
+                        <!-- Right Panel: Results -->
+                        <GroupBox Grid.Column="2" Header="📊 Page Results">
+                            <TabControl x:Name="PageResultsTabControl">
+                                <!-- Dynamic tabs will be added here for each processed page -->
+                                <TabItem Header="No pages processed yet" x:Name="EmptyResultsTab">
+                                    <TextBlock Text="Process a page from the left panel to see results here."
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"
+                                             FontStyle="Italic"
+                                             Foreground="#999"/>
+                                </TabItem>
+                            </TabControl>
+                        </GroupBox>
+                    </Grid>
+                </TabItem>
+            </TabControl>
         </Border>
         
         <!-- Results Section -->
