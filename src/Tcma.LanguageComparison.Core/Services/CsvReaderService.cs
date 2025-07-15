@@ -14,18 +14,37 @@ namespace Tcma.LanguageComparison.Core.Services
         /// Reads content rows from a CSV file
         /// </summary>
         /// <param name="filePath">Path to the CSV file</param>
-        /// <returns>List of ContentRow objects</returns>
-        /// <exception cref="FileNotFoundException">Thrown when file doesn't exist</exception>
-        /// <exception cref="InvalidDataException">Thrown when CSV format is invalid</exception>
-        public async Task<List<ContentRow>> ReadContentRowsAsync(string filePath)
+        /// <returns>OperationResult containing list of ContentRow objects or error info</returns>
+        public async Task<OperationResult<List<ContentRow>>> ReadContentRowsAsync(string filePath)
         {
-            if (!File.Exists(filePath))
-            {
-                throw new FileNotFoundException($"CSV file not found: {filePath}");
-            }
-
             try
             {
+                if (string.IsNullOrWhiteSpace(filePath))
+                {
+                    return OperationResult<List<ContentRow>>.Failure(
+                        CommonErrors.InvalidFilePath(filePath ?? "null"));
+                }
+
+                if (!File.Exists(filePath))
+                {
+                    return OperationResult<List<ContentRow>>.Failure(
+                        CommonErrors.FileNotFound(filePath));
+                }
+
+                // Validate file extension
+                var extension = Path.GetExtension(filePath).ToLower();
+                if (extension != ".csv")
+                {
+                    return OperationResult<List<ContentRow>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.High,
+                        UserMessage = "File không phải định dạng CSV.",
+                        TechnicalDetails = $"Expected .csv extension, got: {extension}",
+                        SuggestedAction = "Vui lòng chọn file có định dạng .csv"
+                    });
+                }
+
                 using var reader = new StreamReader(filePath);
                 using var csv = new CsvReader(reader, GetCsvConfiguration());
 
@@ -34,6 +53,12 @@ namespace Tcma.LanguageComparison.Core.Services
 
                 await foreach (var record in csv.GetRecordsAsync<CsvRowDto>())
                 {
+                    // Validate required fields
+                    if (string.IsNullOrEmpty(record.ContentId) && string.IsNullOrEmpty(record.Content))
+                    {
+                        continue; // Skip empty rows
+                    }
+
                     records.Add(new ContentRow
                     {
                         ContentId = record.ContentId ?? string.Empty,
@@ -42,11 +67,52 @@ namespace Tcma.LanguageComparison.Core.Services
                     });
                 }
 
-                return records;
+                // Validate that we have data
+                if (records.Count == 0)
+                {
+                    return OperationResult<List<ContentRow>>.Failure(
+                        CommonErrors.EmptyFile(filePath));
+                }
+
+                // Validate CSV structure
+                var validationResult = ValidateCsvStructure(records);
+                if (!validationResult.IsSuccess)
+                {
+                    return validationResult;
+                }
+
+                return OperationResult<List<ContentRow>>.Success(records);
             }
-            catch (Exception ex) when (!(ex is FileNotFoundException))
+            catch (UnauthorizedAccessException ex)
             {
-                throw new InvalidDataException($"Error reading CSV file '{filePath}': {ex.Message}", ex);
+                return OperationResult<List<ContentRow>>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Không có quyền truy cập file.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng kiểm tra quyền truy cập file hoặc chọn file khác.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
+            }
+            catch (IOException ex)
+            {
+                return OperationResult<List<ContentRow>>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Lỗi đọc file CSV.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng đóng file nếu đang mở và thử lại.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
+            }
+            catch (Exception ex)
+            {
+                return OperationResult<List<ContentRow>>.Failure(
+                    CommonErrors.InvalidCsvFormat(filePath, ex.Message));
             }
         }
 
@@ -55,25 +121,124 @@ namespace Tcma.LanguageComparison.Core.Services
         /// </summary>
         /// <param name="filePath">Output file path</param>
         /// <param name="contentRows">Content rows to write</param>
-        public async Task WriteContentRowsAsync(string filePath, IEnumerable<ContentRow> contentRows)
+        /// <returns>OperationResult indicating success or error</returns>
+        public async Task<OperationResult<bool>> WriteContentRowsAsync(string filePath, IEnumerable<ContentRow> contentRows)
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(filePath))
+                {
+                    return OperationResult<bool>.Failure(
+                        CommonErrors.InvalidFilePath(filePath ?? "null"));
+                }
+
+                var rows = contentRows?.ToList();
+                if (rows == null || rows.Count == 0)
+                {
+                    return OperationResult<bool>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.Medium,
+                        UserMessage = "Không có dữ liệu để ghi vào file.",
+                        TechnicalDetails = "Content rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo có dữ liệu trước khi xuất file."
+                    });
+                }
+
+                // Ensure directory exists
+                var directory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
                 using var writer = new StreamWriter(filePath);
                 using var csv = new CsvWriter(writer, GetCsvConfiguration());
 
-                var records = contentRows.Select(row => new CsvRowDto
+                var records = rows.Select(row => new CsvRowDto
                 {
                     ContentId = row.ContentId,
                     Content = row.Content
                 });
 
                 await csv.WriteRecordsAsync(records);
+                return OperationResult<bool>.Success(true);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return OperationResult<bool>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Không có quyền ghi file.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng chọn vị trí khác hoặc chạy với quyền Admin.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
+            }
+            catch (IOException ex)
+            {
+                return OperationResult<bool>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Lỗi ghi file CSV.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng đóng file nếu đang mở và thử lại.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Error writing CSV file '{filePath}': {ex.Message}", ex);
+                return OperationResult<bool>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Lỗi ghi file CSV.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng kiểm tra đường dẫn và quyền truy cập.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
             }
+        }
+
+        /// <summary>
+        /// Validates the structure of loaded CSV data
+        /// </summary>
+        private OperationResult<List<ContentRow>> ValidateCsvStructure(List<ContentRow> records)
+        {
+            // Check for minimum required fields
+            var rowsWithoutContentId = records.Count(r => string.IsNullOrWhiteSpace(r.ContentId));
+            var rowsWithoutContent = records.Count(r => string.IsNullOrWhiteSpace(r.Content));
+
+            if (rowsWithoutContentId > records.Count * 0.5) // More than 50% missing ContentId
+            {
+                return OperationResult<List<ContentRow>>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.DataValidation,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "File CSV thiếu cột ContentId hoặc có quá nhiều dòng trống.",
+                    TechnicalDetails = $"{rowsWithoutContentId}/{records.Count} rows missing ContentId",
+                    SuggestedAction = "Vui lòng kiểm tra file CSV có header 'ContentId,Content' và dữ liệu đầy đủ."
+                });
+            }
+
+            if (rowsWithoutContent > records.Count * 0.5) // More than 50% missing Content
+            {
+                return OperationResult<List<ContentRow>>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.DataValidation,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "File CSV thiếu cột Content hoặc có quá nhiều dòng trống.",
+                    TechnicalDetails = $"{rowsWithoutContent}/{records.Count} rows missing Content",
+                    SuggestedAction = "Vui lòng kiểm tra file CSV có header 'ContentId,Content' và dữ liệu đầy đủ."
+                });
+            }
+
+            return OperationResult<List<ContentRow>>.Success(records);
         }
 
         /// <summary>

@@ -6,288 +6,300 @@ using Mscc.GenerativeAI;
 using DotNetEnv;
 using Tcma.LanguageComparison.Core.Models;
 using Tcma.LanguageComparison.Core.Services;
+using Microsoft.Extensions.Configuration;
 
 namespace Tcma.LanguageComparison.Core
 {
-    class Program
+    public class Program
     {
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            Console.WriteLine("=== TCMA Language Comparison Tools ===");
-            Console.WriteLine("Phase 1: Core Logic & Proof of Concept\n");
+            Console.WriteLine("=== TCMA Language Comparison Tool ===");
+            Console.WriteLine("Công cụ so sánh nội dung đa ngôn ngữ sử dụng AI embeddings\n");
 
-            // Load environment variables from .env file
-            LoadEnvironmentVariables();
+            // Load configuration
+            var configService = new ConfigurationService();
+            var config = configService.Configuration;
+            
+            configService.DisplayConfiguration();
 
-            // API Key configuration
+            // Check if Gemini API key is provided
             var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
-            if (string.IsNullOrEmpty(apiKey))
+            if (string.IsNullOrWhiteSpace(apiKey))
             {
-                Console.WriteLine("ERROR: GEMINI_API_KEY environment variable is not set.");
-                Console.WriteLine("Please set your Gemini API key as an environment variable:");
-                Console.WriteLine("set GEMINI_API_KEY=your_api_key_here");
-                Console.WriteLine("Or create a .env file with: GEMINI_API_KEY=your_api_key_here");
+                Console.WriteLine("\n❌ GEMINI_API_KEY environment variable chưa được thiết lập.");
+                Console.WriteLine("Vui lòng thiết lập API key: set GEMINI_API_KEY=your_api_key_here");
+                Console.WriteLine("\nHoặc chạy lệnh sau (thay your_actual_api_key):");
+                Console.WriteLine("$env:GEMINI_API_KEY=\"your_actual_api_key\"");
                 return;
             }
 
             try
             {
-                await RunContentComparisonDemo(apiKey);
+                // Initialize services
+                var csvService = new CsvReaderService();
+                var preprocessingService = new TextPreprocessingService();
+                var embeddingService = new GeminiEmbeddingService(apiKey);
+                var matchingService = new ContentMatchingService(config.LanguageComparison.SimilarityThreshold);
+
+                // Create progress reporter
+                var progress = new Progress<string>(message => 
+                {
+                    Console.WriteLine($"[Progress] {message}");
+                });
+
+                // Test API connection
+                Console.WriteLine("\nKiểm tra kết nối Gemini API...");
+                var connectionResult = await embeddingService.TestConnectionAsync();
+                if (!connectionResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Không thể kết nối với Gemini API: {connectionResult.Error?.UserMessage}");
+                    Console.WriteLine($"Chi tiết: {connectionResult.Error?.TechnicalDetails}");
+                    Console.WriteLine($"Giải pháp: {connectionResult.Error?.SuggestedAction}");
+                    return;
+                }
+                Console.WriteLine("✓ Kết nối Gemini API thành công");
+
+                // Look for sample CSV files
+                var sampleDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "sample"));
+                var englishFile = Path.Combine(sampleDir, "Lifecycle Management_20250603.csv");
+                var koreanFile = Path.Combine(sampleDir, "Lifecycle Management_20250603-KR.csv");
+
+                if (!File.Exists(englishFile) || !File.Exists(koreanFile))
+                {
+                    Console.WriteLine($"\n⚠ Không tìm thấy sample files:");
+                    Console.WriteLine($"   English: {englishFile}");
+                    Console.WriteLine($"   Korean: {koreanFile}");
+                    Console.WriteLine("\nChạy demo với dữ liệu test thay thế...");
+                    await RunSimpleDemo(embeddingService, progress);
+                    return;
+                }
+
+                // Load CSV files
+                Console.WriteLine($"\nĐọc CSV files...");
+                Console.WriteLine($"English file: {englishFile}");
+                Console.WriteLine($"Korean file: {koreanFile}");
+
+                var refResult = await csvService.ReadContentRowsAsync(englishFile);
+                if (!refResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Lỗi đọc file reference: {refResult.Error?.UserMessage}");
+                    Console.WriteLine($"Chi tiết: {refResult.Error?.TechnicalDetails}");
+                    return;
+                }
+
+                var targetResult = await csvService.ReadContentRowsAsync(koreanFile);
+                if (!targetResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Lỗi đọc file target: {targetResult.Error?.UserMessage}");
+                    Console.WriteLine($"Chi tiết: {targetResult.Error?.TechnicalDetails}");
+                    return;
+                }
+
+                var referenceRows = refResult.Data!;
+                var targetRows = targetResult.Data!;
+
+                Console.WriteLine($"✓ Đã đọc {referenceRows.Count} reference rows và {targetRows.Count} target rows");
+
+                // Preprocess content
+                Console.WriteLine("\nXử lý nội dung (loại bỏ HTML tags)...");
+                preprocessingService.ProcessContentRows(referenceRows);
+                preprocessingService.ProcessContentRows(targetRows);
+
+                // Apply demo row limit if configured
+                var limitedRef = config.LanguageComparison.DemoRowLimit > 0 
+                    ? referenceRows.Take(config.LanguageComparison.DemoRowLimit).ToList() 
+                    : referenceRows;
+                var limitedTarget = config.LanguageComparison.DemoRowLimit > 0 
+                    ? targetRows.Take(config.LanguageComparison.DemoRowLimit).ToList() 
+                    : targetRows;
+
+                Console.WriteLine($"✓ Xử lý {limitedRef.Count} reference và {limitedTarget.Count} target rows" +
+                                 (config.LanguageComparison.DemoRowLimit > 0 ? " (giới hạn cho demo)" : ""));
+
+                // Generate embeddings
+                Console.WriteLine("\nTạo embeddings cho nội dung reference...");
+                var refEmbeddingResult = await embeddingService.GenerateEmbeddingsAsync(limitedRef, progress);
+                if (!refEmbeddingResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Lỗi tạo embeddings cho reference: {refEmbeddingResult.Error?.UserMessage}");
+                    return;
+                }
+
+                Console.WriteLine("\nTạo embeddings cho nội dung target...");
+                var targetEmbeddingResult = await embeddingService.GenerateEmbeddingsAsync(limitedTarget, progress);
+                if (!targetEmbeddingResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Lỗi tạo embeddings cho target: {targetEmbeddingResult.Error?.UserMessage}");
+                    return;
+                }
+
+                var refStats = refEmbeddingResult.Data!;
+                var targetStats = targetEmbeddingResult.Data!;
+
+                Console.WriteLine($"\nThống kê embeddings:");
+                Console.WriteLine($"Reference: {refStats.SuccessfulRows}/{refStats.TotalRows} thành công ({refStats.SuccessRate:F1}%)");
+                Console.WriteLine($"Target: {targetStats.SuccessfulRows}/{targetStats.TotalRows} thành công ({targetStats.SuccessRate:F1}%)");
+
+                if (refStats.SuccessfulRows == 0 || targetStats.SuccessfulRows == 0)
+                {
+                    Console.WriteLine("❌ Không thể tiếp tục vì không có embeddings thành công");
+                    return;
+                }
+
+                // Perform line-by-line matching
+                Console.WriteLine("\nThực hiện so sánh line-by-line...");
+                var lineByLineResult = await matchingService.GenerateLineByLineReportAsync(limitedRef, limitedTarget, progress);
+                if (!lineByLineResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Lỗi trong quá trình so sánh: {lineByLineResult.Error?.UserMessage}");
+                    return;
+                }
+
+                var lineByLineResults = lineByLineResult.Data!;
+
+                // Create MatchResult objects for statistics
+                var matchResults = lineByLineResults.Select(r => new MatchResult
+                {
+                    ReferenceRow = r.CorrespondingReferenceRow ?? new ContentRow(),
+                    MatchedRow = r.TargetRow,
+                    SimilarityScore = r.LineByLineScore,
+                    IsGoodMatch = r.IsGoodLineByLineMatch
+                }).ToList();
+
+                // Display statistics
+                var stats = matchingService.GetMatchingStatistics(matchResults);
+                Console.WriteLine("\n=== KẾT QUẢ SO SÁNH ===");
+                Console.WriteLine($"Tổng số dòng được so sánh: {stats.TotalReferenceRows}");
+                Console.WriteLine($"Matches tốt (>= threshold): {stats.GoodMatches}");
+                Console.WriteLine($"Tỷ lệ match: {stats.MatchPercentage:F1}%");
+                Console.WriteLine($"Điểm similarity trung bình: {stats.AverageSimilarityScore:F3}");
+                Console.WriteLine($"\nPhân loại chất lượng:");
+                Console.WriteLine($"  Cao (>= 0.8): {stats.HighQualityMatches}");
+                Console.WriteLine($"  Trung bình (0.6-0.8): {stats.MediumQualityMatches}");
+                Console.WriteLine($"  Thấp (0.4-0.6): {stats.LowQualityMatches}");
+                Console.WriteLine($"  Kém (< 0.4): {stats.PoorQualityMatches}");
+
+                // Show some examples
+                Console.WriteLine("\n=== VÍ DỤ KẾT QUẢ ===");
+                var examples = lineByLineResults.Take(Math.Min(5, lineByLineResults.Count)).ToList();
+                
+                foreach (var result in examples)
+                {
+                    Console.WriteLine($"\nDòng #{result.TargetRow.OriginalIndex + 1}:");
+                    Console.WriteLine($"Target: {TruncateText(result.TargetRow.Content, 80)}");
+                    Console.WriteLine($"Reference: {TruncateText(result.CorrespondingReferenceRow?.Content ?? "N/A", 80)}");
+                    Console.WriteLine($"Score: {result.LineByLineScore:F3} | Quality: {result.Quality}");
+                    
+                    if (result.SuggestedMatch != null && !result.IsGoodLineByLineMatch)
+                    {
+                        Console.WriteLine($"Suggestion: {TruncateText(result.SuggestedMatch.ReferenceRow.Content, 80)} (Score: {result.SuggestedMatch.SimilarityScore:F3})");
+                    }
+                }
+
+                // Export results
+                Console.WriteLine("\nXuất kết quả...");
+                var outputFile = Path.Combine(sampleDir, "Comparison_Results.csv");
+                var exportData = lineByLineResults.Select((result, index) => new ContentRow
+                {
+                    ContentId = $"Line{index + 1}",
+                    Content = CreateExportContent(result)
+                }).ToList();
+
+                var exportResult = await csvService.WriteContentRowsAsync(outputFile, exportData);
+                if (exportResult.IsSuccess)
+                {
+                    Console.WriteLine($"✓ Đã xuất kết quả ra: {outputFile}");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Lỗi xuất file: {exportResult.Error?.UserMessage}");
+                }
+
+                Console.WriteLine("\n=== HOÀN THÀNH ===");
+                Console.WriteLine("Nhấn Enter để thoát...");
+                Console.ReadLine();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ERROR: {ex.Message}");
+                Console.WriteLine($"\n❌ Lỗi không mong muốn: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
-
-            Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
         }
 
-        /// <summary>
-        /// Main demo function for content comparison
-        /// </summary>
-        static async Task RunContentComparisonDemo(string apiKey)
+        private static async Task RunSimpleDemo(GeminiEmbeddingService embeddingService, IProgress<string> progress)
         {
-            // Load configuration
-            var configService = new ConfigurationService();
-            var config = configService.Configuration;
-
-            // Display current configuration
-            configService.DisplayConfiguration();
-
-            // Initialize services with configuration
-            var embeddingService = new GeminiEmbeddingService(apiKey);
-            var csvService = new CsvReaderService();
-            var preprocessingService = new TextPreprocessingService();
-            var matchingService = new ContentMatchingService(config.LanguageComparison.SimilarityThreshold);
+            Console.WriteLine("\n=== DEMO ĐƠN GIẢN ===");
             
-            var progress = config.Output.ShowProgressMessages 
-                ? new Progress<string>(message => Console.WriteLine($"[INFO] {message}"))
-                : null;
-
-            Console.WriteLine("✓ Khởi tạo thành công các services");
-
-            // Test API connection
-            Console.WriteLine("\nKiểm tra kết nối Gemini API...");
-            var isConnected = await embeddingService.TestConnectionAsync();
-            if (!isConnected)
+            // Test with simple content
+            var testRef = new List<ContentRow>
             {
-                Console.WriteLine("❌ Không thể kết nối với Gemini API. Vui lòng kiểm tra API key.");
-                return;
-            }
-            Console.WriteLine("✓ Kết nối Gemini API thành công");
-
-            // Look for sample CSV files
-            var sampleDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "sample"));
-            var englishFile = Path.Combine(sampleDir, "Lifecycle Management_20250603.csv");
-            var koreanFile = Path.Combine(sampleDir, "Lifecycle Management_20250603-KR.csv");
-
-            if (!File.Exists(englishFile) || !File.Exists(koreanFile))
-            {
-                Console.WriteLine($"\n⚠ Không tìm thấy sample files:");
-                Console.WriteLine($"   English: {englishFile}");
-                Console.WriteLine($"   Korean: {koreanFile}");
-                Console.WriteLine("\nChạy demo với dữ liệu test thay thế...");
-                await RunSimpleDemo(embeddingService, progress);
-                return;
-            }
-
-            // Load CSV files
-            Console.WriteLine($"\nĐọc CSV files...");
-            Console.WriteLine($"English file: {englishFile}");
-            Console.WriteLine($"Korean file: {koreanFile}");
-
-            var referenceRows = await csvService.ReadContentRowsAsync(englishFile);
-            var targetRows = await csvService.ReadContentRowsAsync(koreanFile);
-
-            Console.WriteLine($"✓ Đã đọc {referenceRows.Count} reference rows và {targetRows.Count} target rows");
-
-            // Preprocess content
-            Console.WriteLine("\nXử lý nội dung (loại bỏ HTML tags)...");
-            preprocessingService.ProcessContentRows(referenceRows);
-            preprocessingService.ProcessContentRows(targetRows);
-
-            // Apply demo row limit if configured
-            var limitedRef = config.LanguageComparison.DemoRowLimit > 0 
-                ? referenceRows.Take(config.LanguageComparison.DemoRowLimit).ToList() 
-                : referenceRows;
-            var limitedTarget = config.LanguageComparison.DemoRowLimit > 0 
-                ? targetRows.Take(config.LanguageComparison.DemoRowLimit).ToList() 
-                : targetRows;
-
-            Console.WriteLine($"✓ Xử lý {limitedRef.Count} reference và {limitedTarget.Count} target rows" +
-                             (config.LanguageComparison.DemoRowLimit > 0 ? " (giới hạn cho demo)" : ""));
-
-            // Generate embeddings
-            Console.WriteLine("\nTạo embeddings...");
-            await embeddingService.GenerateEmbeddingsAsync(limitedRef, progress);
-            await embeddingService.GenerateEmbeddingsAsync(limitedTarget, progress);
-
-            // Find matches
-            Console.WriteLine("\nTìm matches...");
-            var matchResults = await matchingService.FindMatchesAsync(limitedRef, limitedTarget, progress);
-
-            // Display results if configured
-            if (config.Output.ShowDetailedResults)
-            {
-                DisplayMatchResults(matchResults);
-            }
-
-            // Generate and display statistics
-            var stats = matchingService.GetMatchingStatistics(matchResults);
-            DisplayStatistics(stats);
-
-            // Create reordered file
-            Console.WriteLine("\nTạo file đã sắp xếp lại...");
-            var reorderedRows = matchingService.CreateReorderedTargetList(matchResults);
-            var outputFile = Path.Combine(sampleDir, "Reordered_Korean_Output.csv");
-            await csvService.WriteContentRowsAsync(outputFile, reorderedRows);
-            Console.WriteLine($"✓ Đã tạo file: {outputFile}");
-        }
-
-        /// <summary>
-        /// Simple demo with hardcoded text data
-        /// </summary>
-        static async Task RunSimpleDemo(GeminiEmbeddingService embeddingService, IProgress<string>? progress)
-        {
-            // Load configuration for simple demo
-            var configService = new ConfigurationService();
-            var config = configService.Configuration;
-
-            // Create test data
-            var referenceRows = new List<ContentRow>
-            {
-                new() { ContentId = "1", Content = "Hello, how are you today?", OriginalIndex = 0 },
-                new() { ContentId = "2", Content = "The weather is beautiful today.", OriginalIndex = 1 },
-                new() { ContentId = "3", Content = "Please save your work before closing.", OriginalIndex = 2 }
+                new() { ContentId = "1", Content = "Hello world", OriginalIndex = 0 },
+                new() { ContentId = "2", Content = "Good morning", OriginalIndex = 1 },
+                new() { ContentId = "3", Content = "Thank you", OriginalIndex = 2 }
             };
 
-            var targetRows = new List<ContentRow>
+            var testTarget = new List<ContentRow>
             {
-                new() { ContentId = "A", Content = "작업을 저장한 후 닫으세요.", OriginalIndex = 0 }, // Korean for "save work"
-                new() { ContentId = "B", Content = "안녕하세요, 오늘 어떠세요?", OriginalIndex = 1 }, // Korean for "hello"
-                new() { ContentId = "C", Content = "오늘 날씨가 정말 좋네요.", OriginalIndex = 2 } // Korean for "weather"
+                new() { ContentId = "1", Content = "안녕하세요", OriginalIndex = 0 },
+                new() { ContentId = "2", Content = "좋은 아침입니다", OriginalIndex = 1 },
+                new() { ContentId = "3", Content = "감사합니다", OriginalIndex = 2 }
             };
 
-            var preprocessingService = new TextPreprocessingService();
-            var matchingService = new ContentMatchingService(config.LanguageComparison.SimilarityThreshold);
-
-            // Process content
-            preprocessingService.ProcessContentRows(referenceRows);
-            preprocessingService.ProcessContentRows(targetRows);
-
-            // Generate embeddings
-            await embeddingService.GenerateEmbeddingsAsync(referenceRows, progress);
-            await embeddingService.GenerateEmbeddingsAsync(targetRows, progress);
-
-            // Find matches
-            var matchResults = await matchingService.FindMatchesAsync(referenceRows, targetRows, progress);
-
-            // Display results
-            DisplayMatchResults(matchResults);
-
-            var stats = matchingService.GetMatchingStatistics(matchResults);
-            DisplayStatistics(stats);
-        }
-
-        /// <summary>
-        /// Load environment variables from .env file
-        /// </summary>
-        static void LoadEnvironmentVariables()
-        {
-            // Look for .env file in current directory, then parent directories
-            Env.Load(Path.Combine(Directory.GetCurrentDirectory(), ".env"));
-            if (!File.Exists(Path.Combine(Directory.GetCurrentDirectory(), ".env")))
+            // Set clean content
+            foreach (var row in testRef.Concat(testTarget))
             {
-                var rootDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", ".."));
-                var envFile = Path.Combine(rootDir, ".env");
-                if (File.Exists(envFile))
+                row.CleanContent = row.Content;
+            }
+
+            Console.WriteLine("Tạo embeddings cho demo content...");
+            var refResult = await embeddingService.GenerateEmbeddingsAsync(testRef, progress);
+            var targetResult = await embeddingService.GenerateEmbeddingsAsync(testTarget, progress);
+
+            if (refResult.IsSuccess && targetResult.IsSuccess)
+            {
+                var matchingService = new ContentMatchingService(0.3);
+                var lineByLineResult = await matchingService.GenerateLineByLineReportAsync(testRef, testTarget, progress);
+                
+                if (lineByLineResult.IsSuccess)
                 {
-                    Env.Load(envFile);
+                    Console.WriteLine("\nKết quả demo:");
+                    foreach (var result in lineByLineResult.Data!)
+                    {
+                        Console.WriteLine($"'{result.TargetRow.Content}' <-> '{result.CorrespondingReferenceRow?.Content}' | Score: {result.LineByLineScore:F3}");
+                    }
                 }
             }
         }
 
-        /// <summary>
-        /// Display match results in a formatted table
-        /// </summary>
-        static void DisplayMatchResults(IEnumerable<MatchResult> matchResults)
+        private static string TruncateText(string text, int maxLength)
         {
-            Console.WriteLine("\n=== MATCH RESULTS ===");
-            Console.WriteLine($"{"Index",-5} {"Quality",-8} {"Score",-6} {"Reference Content",-40} {"Matched Content",-40}");
-            Console.WriteLine(new string('=', 105));
-
-            foreach (var result in matchResults)
-            {
-                var qualityColor = result.Quality switch
-                {
-                    MatchQuality.High => "HIGH",
-                    MatchQuality.Medium => "MED",
-                    MatchQuality.Low => "LOW",
-                    _ => "POOR"
-                };
-
-                var refContent = result.ReferenceRow.CleanContent.Length > 37 
-                    ? result.ReferenceRow.CleanContent[..37] + "..." 
-                    : result.ReferenceRow.CleanContent;
-
-                var matchedContent = result.MatchedRow?.CleanContent?.Length > 37
-                    ? result.MatchedRow.CleanContent[..37] + "..."
-                    : result.MatchedRow?.CleanContent ?? "[NO MATCH]";
-
-                Console.WriteLine($"{result.ReferenceRow.OriginalIndex,-5} {qualityColor,-8} {result.SimilarityScore,-6:F3} {refContent,-40} {matchedContent,-40}");
-            }
+            if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+                return text;
+            
+            return text.Substring(0, maxLength - 3) + "...";
         }
 
-        /// <summary>
-        /// Display matching statistics
-        /// </summary>
-        static void DisplayStatistics(MatchingStatistics stats)
+        private static string CreateExportContent(LineByLineMatchResult result)
         {
-            Console.WriteLine("\n=== STATISTICS ===");
-            Console.WriteLine($"Total Reference Rows: {stats.TotalReferenceRows}");
-            Console.WriteLine($"Good Matches: {stats.GoodMatches} ({stats.MatchPercentage:F1}%)");
-            Console.WriteLine($"High Quality: {stats.HighQualityMatches}");
-            Console.WriteLine($"Medium Quality: {stats.MediumQualityMatches}");
-            Console.WriteLine($"Low Quality: {stats.LowQualityMatches}");
-            Console.WriteLine($"Poor Quality: {stats.PoorQualityMatches}");
-            Console.WriteLine($"Average Similarity: {stats.AverageSimilarityScore:F3}");
-        }
-
-        /// <summary>
-        /// Calculate cosine similarity between two embedding vectors
-        /// </summary>
-        /// <param name="vector1">First embedding vector</param>
-        /// <param name="vector2">Second embedding vector</param>
-        /// <returns>Cosine similarity value between -1 and 1</returns>
-        static double CalculateCosineSimilarity(IList<float> vector1, IList<float> vector2)
-        {
-            if (vector1.Count != vector2.Count)
+            var parts = new List<string>
             {
-                throw new ArgumentException("Vectors must have the same length");
-            }
-
-            double dotProduct = 0.0;
-            double magnitude1 = 0.0;
-            double magnitude2 = 0.0;
-
-            for (int i = 0; i < vector1.Count; i++)
+                $"Target Line #{result.TargetRow.OriginalIndex + 1}: {result.TargetRow.Content}",
+                $"Reference Content: {result.CorrespondingReferenceRow?.Content ?? "N/A"}",
+                $"Similarity Score: {result.LineByLineScore:F3}",
+                $"Quality: {result.Quality}"
+            };
+            
+            if (result.SuggestedMatch != null && !result.IsGoodLineByLineMatch)
             {
-                dotProduct += vector1[i] * vector2[i];
-                magnitude1 += vector1[i] * vector1[i];
-                magnitude2 += vector2[i] * vector2[i];
+                parts.Add($"Suggestion: {result.SuggestedMatch.ReferenceRow.Content} (Score: {result.SuggestedMatch.SimilarityScore:F3})");
             }
-
-            magnitude1 = Math.Sqrt(magnitude1);
-            magnitude2 = Math.Sqrt(magnitude2);
-
-            if (magnitude1 == 0.0 || magnitude2 == 0.0)
+            else
             {
-                return 0.0;
+                parts.Add("Suggestion: N/A");
             }
-
-            return dotProduct / (magnitude1 * magnitude2);
+            
+            return string.Join(" ||| ", parts);
         }
     }
 }

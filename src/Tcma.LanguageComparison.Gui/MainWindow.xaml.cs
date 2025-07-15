@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private string? _targetFilePath;
     private List<LineByLineMatchResult>? _comparisonResults;
     private readonly SettingsService _settingsService;
+    private readonly ErrorHandlingService _errorHandler;
     
     public ObservableCollection<ComparisonResultViewModel> Results { get; } = new();
 
@@ -32,22 +33,27 @@ public partial class MainWindow : Window
         
         _settingsService = new SettingsService();
         
+        // Initialize error handling service with UI callbacks
+        _errorHandler = new ErrorHandlingService(
+            statusUpdater: ShowStatus,
+            progressUpdater: ShowProgress,
+            hideProgress: HideProgress
+        );
+        
         // Load settings and initialize UI
-        _ = InitializeAsync();
+        Task.Run(InitializeAsync);
     }
 
     private async Task InitializeAsync()
     {
-        try
+        var result = await _settingsService.LoadSettingsAsync();
+        if (result.IsSuccess)
         {
-            await _settingsService.LoadSettingsAsync();
-            
-            // Settings loaded successfully
             ShowStatus("Settings loaded successfully");
         }
-        catch (Exception ex)
+        else
         {
-            ShowError($"Failed to load settings: {ex.Message}");
+            await _errorHandler.HandleErrorAsync(result.Error!, showDialog: false);
         }
     }
 
@@ -67,7 +73,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowError($"Failed to open settings: {ex.Message}");
+            var error = _errorHandler.ProcessException(ex, "Opening settings window");
+            await _errorHandler.HandleErrorAsync(error);
         }
     }
 
@@ -117,16 +124,36 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(_referenceFilePath) || string.IsNullOrEmpty(_targetFilePath))
         {
-            MessageBox.Show("Please select both reference and target CSV files.", "Missing Files", 
-                          MessageBoxButton.OK, MessageBoxImage.Warning);
+            var error = new ErrorInfo
+            {
+                Category = ErrorCategory.UserInput,
+                Severity = ErrorSeverity.Medium,
+                UserMessage = "Vui lòng chọn cả file reference và target CSV.",
+                SuggestedAction = "Sử dụng nút Browse để chọn các file cần thiết."
+            };
+            await _errorHandler.HandleErrorAsync(error);
             return;
         }
 
         var apiKey = _settingsService.ApiKey;
         if (string.IsNullOrEmpty(apiKey))
         {
-            MessageBox.Show("Please configure your Gemini API key in Settings.", "Missing API Key", 
-                          MessageBoxButton.OK, MessageBoxImage.Warning);
+            var error = new ErrorInfo
+            {
+                Category = ErrorCategory.Configuration,
+                Severity = ErrorSeverity.High,
+                UserMessage = "Vui lòng cấu hình Gemini API key trong Settings.",
+                SuggestedAction = "Nhấn nút Settings để nhập API key."
+            };
+            await _errorHandler.HandleErrorAsync(error);
+            return;
+        }
+
+        // Test network connectivity first
+        if (!await _errorHandler.TestNetworkConnectivityAsync())
+        {
+            var error = CommonErrors.NetworkConnectionError();
+            await _errorHandler.HandleErrorAsync(error);
             return;
         }
 
@@ -141,14 +168,27 @@ public partial class MainWindow : Window
             var csvReader = new CsvReaderService();
             var textPreprocessor = new TextPreprocessingService();
             var embeddingService = new GeminiEmbeddingService(apiKey);
-            var contentMatcher = new ContentMatchingService(_settingsService.SimilarityThreshold); // Use threshold from settings
+            var contentMatcher = new ContentMatchingService(_settingsService.SimilarityThreshold);
 
-            // Load CSV files
+            // Test API connection first
+            ShowProgress("Testing API connection...");
+            var connectionResult = await embeddingService.TestConnectionAsync();
+            if (!connectionResult.IsSuccess)
+            {
+                await _errorHandler.HandleErrorAsync(connectionResult.Error!);
+                return;
+            }
+
+            // Load CSV files with error handling
             ShowProgress("Loading reference file...");
-            var referenceRows = await csvReader.ReadContentRowsAsync(_referenceFilePath);
+            var refResult = await csvReader.ReadContentRowsAsync(_referenceFilePath);
+            var referenceRows = await _errorHandler.HandleResultAsync(refResult);
+            if (referenceRows == null) return;
             
             ShowProgress("Loading target file...");
-            var targetRows = await csvReader.ReadContentRowsAsync(_targetFilePath);
+            var targetResult = await csvReader.ReadContentRowsAsync(_targetFilePath);
+            var targetRows = await _errorHandler.HandleResultAsync(targetResult);
+            if (targetRows == null) return;
 
             ShowProgress($"Processing {referenceRows.Count} reference rows and {targetRows.Count} target rows...");
 
@@ -163,17 +203,38 @@ public partial class MainWindow : Window
                 Dispatcher.Invoke(() => ShowProgress(message));
             });
 
-            // Generate embeddings
+            // Generate embeddings with error handling
             ShowProgress("Generating embeddings for reference content...");
-            await embeddingService.GenerateEmbeddingsAsync(referenceRows, progress);
+            var refEmbeddingResult = await embeddingService.GenerateEmbeddingsAsync(referenceRows, progress);
+            var refStats = await _errorHandler.HandleResultAsync(refEmbeddingResult);
+            if (refStats == null) return;
 
             ShowProgress("Generating embeddings for target content...");
-            await embeddingService.GenerateEmbeddingsAsync(targetRows, progress);
+            var targetEmbeddingResult = await embeddingService.GenerateEmbeddingsAsync(targetRows, progress);
+            var targetStats = await _errorHandler.HandleResultAsync(targetEmbeddingResult);
+            if (targetStats == null) return;
 
-            // Perform matching
+            // Check if we have enough successful embeddings
+            if (refStats.SuccessfulRows == 0 || targetStats.SuccessfulRows == 0)
+            {
+                var error = new ErrorInfo
+                {
+                    Category = ErrorCategory.DataValidation,
+                    Severity = ErrorSeverity.Critical,
+                    UserMessage = "Không thể tạo embeddings cho dữ liệu.",
+                    TechnicalDetails = $"Reference: {refStats.SuccessfulRows}/{refStats.TotalRows}, Target: {targetStats.SuccessfulRows}/{targetStats.TotalRows}",
+                    SuggestedAction = "Vui lòng kiểm tra dữ liệu và API key."
+                };
+                await _errorHandler.HandleErrorAsync(error);
+                return;
+            }
+
+            // Perform matching with error handling
             ShowProgress("Finding matches...");
-            _comparisonResults = await contentMatcher.GenerateLineByLineReportAsync(
+            var matchingResult = await contentMatcher.GenerateLineByLineReportAsync(
                 referenceRows, targetRows, progress);
+            _comparisonResults = await _errorHandler.HandleResultAsync(matchingResult);
+            if (_comparisonResults == null) return;
 
             // Update UI with results
             ShowProgress("Updating results...");
@@ -201,20 +262,25 @@ public partial class MainWindow : Window
             ShowProgress("Comparison completed successfully.");
             ExportButton.IsEnabled = true;
 
-            MessageBox.Show($"Comparison completed!\n\n" +
-                          $"Total reference rows: {stats.TotalReferenceRows}\n" +
-                          $"Good matches: {stats.GoodMatches}\n" +
-                          $"High quality: {stats.HighQualityMatches}\n" +
-                          $"Medium quality: {stats.MediumQualityMatches}\n" +
-                          $"Low quality: {stats.LowQualityMatches}\n" +
-                          $"Match percentage: {stats.MatchPercentage:P1}", 
-                          "Comparison Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+            // Show completion message with detailed statistics
+            var completionMessage = $"So sánh hoàn thành thành công!\n\n" +
+                                  $"Tổng số reference rows: {stats.TotalReferenceRows}\n" +
+                                  $"Matches tốt: {stats.GoodMatches}\n" +
+                                  $"Chất lượng cao: {stats.HighQualityMatches}\n" +
+                                  $"Chất lượng trung bình: {stats.MediumQualityMatches}\n" +
+                                  $"Chất lượng thấp: {stats.LowQualityMatches}\n" +
+                                  $"Tỷ lệ match: {stats.MatchPercentage:F1}%\n\n" +
+                                  $"Embedding stats:\n" +
+                                  $"Reference: {refStats.SuccessfulRows}/{refStats.TotalRows} ({refStats.SuccessRate:F1}%)\n" +
+                                  $"Target: {targetStats.SuccessfulRows}/{targetStats.TotalRows} ({targetStats.SuccessRate:F1}%)";
+
+            MessageBox.Show(completionMessage, "Comparison Complete", 
+                          MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            ShowProgress("Error occurred during comparison.");
-            MessageBox.Show($"An error occurred during comparison:\n\n{ex.Message}", 
-                          "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            var error = _errorHandler.ProcessException(ex, "Performing comparison");
+            await _errorHandler.HandleErrorAsync(error);
         }
         finally
         {
@@ -227,8 +293,14 @@ public partial class MainWindow : Window
     {
         if (_comparisonResults == null || !_comparisonResults.Any())
         {
-            MessageBox.Show("No comparison results to export.", "No Data", 
-                          MessageBoxButton.OK, MessageBoxImage.Warning);
+            var error = new ErrorInfo
+            {
+                Category = ErrorCategory.UserInput,
+                Severity = ErrorSeverity.Medium,
+                UserMessage = "Không có kết quả so sánh để export.",
+                SuggestedAction = "Vui lòng thực hiện so sánh trước khi export."
+            };
+            await _errorHandler.HandleErrorAsync(error);
             return;
         }
 
@@ -248,30 +320,29 @@ public partial class MainWindow : Window
                 ShowProgress("Exporting report...");
 
                 var csvReader = new CsvReaderService();
-                // Create report rows with additional columns
-                var reportRows = _comparisonResults.Select(r => new 
+                var exportData = _comparisonResults.Select(result => new ContentRow
                 {
-                    TargetId = r.TargetRow.ContentId,
-                    TargetContent = r.TargetRow.Content,
-                    RefId = r.CorrespondingReferenceRow?.ContentId ?? "N/A",
-                    RefContent = r.CorrespondingReferenceRow?.Content ?? "N/A",
-                    Score = r.LineByLineScore.ToString("F3"),
-                    Quality = r.Quality.ToString(),
-                    Suggestion = r.SuggestedMatch != null ? $"Suggested Ref: {r.SuggestedMatch.ReferenceRow.ContentId} with score {r.SuggestedMatch.SimilarityScore:F3}" : "None"
-                });
+                    ContentId = $"Line{result.TargetRow.OriginalIndex + 1}",
+                    Content = CreateExportContent(result)
+                }).ToList();
 
-                // Note: CsvHelper can write anonymous types
-                await csvReader.WriteContentRowsAsync(saveFileDialog.FileName, reportRows.Select(r => new ContentRow { ContentId = r.TargetId, Content = $"{r.TargetContent},{r.RefId},{r.RefContent},{r.Score},{r.Quality},{r.Suggestion}" }));
-
-                ShowProgress("Export completed successfully.");
-                MessageBox.Show($"Report exported successfully to:\n{saveFileDialog.FileName}", 
-                              "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                var exportResult = await csvReader.WriteContentRowsAsync(saveFileDialog.FileName, exportData);
+                
+                if (exportResult.IsSuccess)
+                {
+                    ShowStatus($"Report exported successfully to: {saveFileDialog.FileName}");
+                    MessageBox.Show($"Report exported successfully!\n\nFile: {saveFileDialog.FileName}", 
+                                  "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    await _errorHandler.HandleErrorAsync(exportResult.Error!);
+                }
             }
             catch (Exception ex)
             {
-                ShowProgress("Error occurred during export.");
-                MessageBox.Show($"An error occurred during export:\n\n{ex.Message}", 
-                              "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                var error = _errorHandler.ProcessException(ex, "Exporting report");
+                await _errorHandler.HandleErrorAsync(error);
             }
             finally
             {
@@ -279,6 +350,25 @@ public partial class MainWindow : Window
                 HideProgress();
             }
         }
+    }
+
+    private string CreateExportContent(LineByLineMatchResult result)
+    {
+        var content = $"Target Line #{result.TargetRow.OriginalIndex + 1}: {result.TargetRow.Content}|||";
+        content += $"Reference Content: {result.CorrespondingReferenceRow?.Content ?? "N/A"}|||";
+        content += $"Similarity Score: {result.LineByLineScore:F3}|||";
+        content += $"Quality: {result.Quality}|||";
+        
+        if (result.SuggestedMatch != null && !result.IsGoodLineByLineMatch)
+        {
+            content += $"Suggestion: {result.SuggestedMatch.ReferenceRow.Content} (Score: {result.SuggestedMatch.SimilarityScore:F3})";
+        }
+        else
+        {
+            content += "Suggestion: N/A";
+        }
+        
+        return content;
     }
 
     private void SetUIEnabled(bool enabled)

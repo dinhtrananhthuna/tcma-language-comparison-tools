@@ -29,73 +29,263 @@ namespace Tcma.LanguageComparison.Core.Services
         /// <param name="referenceRows">Reference language content (e.g., English)</param>
         /// <param name="targetRows">Target language content (e.g., Korean)</param>
         /// <param name="progressCallback">Optional callback for progress updates</param>
-        /// <returns>List of match results</returns>
-        public async Task<List<MatchResult>> FindMatchesAsync(
+        /// <returns>OperationResult containing list of match results or error info</returns>
+        public async Task<OperationResult<List<MatchResult>>> FindMatchesAsync(
             IEnumerable<ContentRow> referenceRows,
             IEnumerable<ContentRow> targetRows,
             IProgress<string>? progressCallback = null)
         {
-            var refList = referenceRows.ToList();
-            var targetList = targetRows.ToList();
-            var results = new List<MatchResult>();
-
-            progressCallback?.Report($"Bắt đầu tìm matches cho {refList.Count} reference rows với {targetList.Count} target rows...");
-
-            // Validate that embeddings exist
-            var refWithEmbeddings = refList.Where(r => r.EmbeddingVector != null).ToList();
-            var targetWithEmbeddings = targetList.Where(t => t.EmbeddingVector != null).ToList();
-
-            if (refWithEmbeddings.Count == 0)
+            try
             {
-                throw new InvalidOperationException("No reference rows have embedding vectors. Please generate embeddings first.");
-            }
+                var refList = referenceRows?.ToList();
+                var targetList = targetRows?.ToList();
 
-            if (targetWithEmbeddings.Count == 0)
-            {
-                throw new InvalidOperationException("No target rows have embedding vectors. Please generate embeddings first.");
-            }
-
-            progressCallback?.Report($"Có {refWithEmbeddings.Count} reference và {targetWithEmbeddings.Count} target rows có embeddings.");
-
-            // Keep track of used target rows to avoid duplicate matches
-            var usedTargetRows = new HashSet<int>();
-            var processed = 0;
-
-            // For each reference row, find the best match in target rows
-            foreach (var refRow in refWithEmbeddings)
-            {
-                var bestMatch = await FindBestMatchAsync(refRow, targetWithEmbeddings, usedTargetRows);
-                results.Add(bestMatch);
-
-                // Mark the matched target row as used (if found)
-                if (bestMatch.MatchedRow != null && bestMatch.IsGoodMatch)
+                if (refList == null || refList.Count == 0)
                 {
-                    usedTargetRows.Add(bestMatch.MatchedRow.OriginalIndex);
+                    return OperationResult<List<MatchResult>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.High,
+                        UserMessage = "Không có dữ liệu reference để so sánh.",
+                        TechnicalDetails = "Reference rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo file reference có dữ liệu hợp lệ."
+                    });
                 }
 
-                processed++;
-                if (processed % 10 == 0 || processed == refWithEmbeddings.Count)
+                if (targetList == null || targetList.Count == 0)
                 {
-                    progressCallback?.Report($"Đã xử lý {processed}/{refWithEmbeddings.Count} reference rows...");
+                    return OperationResult<List<MatchResult>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.High,
+                        UserMessage = "Không có dữ liệu target để so sánh.",
+                        TechnicalDetails = "Target rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo file target có dữ liệu hợp lệ."
+                    });
                 }
-            }
 
-            // Add unmatched reference rows
-            var unmatchedRefRows = refList.Where(r => r.EmbeddingVector == null);
-            foreach (var unmatchedRow in unmatchedRefRows)
-            {
-                results.Add(new MatchResult
+                var results = new List<MatchResult>();
+
+                progressCallback?.Report($"Bắt đầu tìm matches cho {refList.Count} reference rows với {targetList.Count} target rows...");
+
+                // Validate that embeddings exist
+                var refWithEmbeddings = refList.Where(r => r.EmbeddingVector != null).ToList();
+                var targetWithEmbeddings = targetList.Where(t => t.EmbeddingVector != null).ToList();
+
+                if (refWithEmbeddings.Count == 0)
                 {
-                    ReferenceRow = unmatchedRow,
-                    MatchedRow = null,
-                    SimilarityScore = 0.0,
-                    IsGoodMatch = false
+                    return OperationResult<List<MatchResult>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.Critical,
+                        UserMessage = "Không có reference rows nào có embedding vectors.",
+                        TechnicalDetails = "No reference rows have embedding vectors",
+                        SuggestedAction = "Vui lòng tạo embeddings cho file reference trước."
+                    });
+                }
+
+                if (targetWithEmbeddings.Count == 0)
+                {
+                    return OperationResult<List<MatchResult>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.Critical,
+                        UserMessage = "Không có target rows nào có embedding vectors.",
+                        TechnicalDetails = "No target rows have embedding vectors",
+                        SuggestedAction = "Vui lòng tạo embeddings cho file target trước."
+                    });
+                }
+
+                progressCallback?.Report($"Có {refWithEmbeddings.Count} reference và {targetWithEmbeddings.Count} target rows có embeddings.");
+
+                // Keep track of used target rows to avoid duplicate matches
+                var usedTargetRows = new HashSet<int>();
+                var processed = 0;
+
+                // For each reference row, find the best match in target rows
+                foreach (var refRow in refWithEmbeddings)
+                {
+                    var bestMatch = await FindBestMatchAsync(refRow, targetWithEmbeddings, usedTargetRows);
+                    results.Add(bestMatch);
+
+                    // Mark the matched target row as used (if found)
+                    if (bestMatch.MatchedRow != null && bestMatch.IsGoodMatch)
+                    {
+                        usedTargetRows.Add(bestMatch.MatchedRow.OriginalIndex);
+                    }
+
+                    processed++;
+                    if (processed % 10 == 0 || processed == refWithEmbeddings.Count)
+                    {
+                        progressCallback?.Report($"Đã xử lý {processed}/{refWithEmbeddings.Count} reference rows...");
+                    }
+                }
+
+                // Add unmatched reference rows
+                var unmatchedRefRows = refList.Where(r => r.EmbeddingVector == null);
+                foreach (var unmatchedRow in unmatchedRefRows)
+                {
+                    results.Add(new MatchResult
+                    {
+                        ReferenceRow = unmatchedRow,
+                        MatchedRow = null,
+                        SimilarityScore = 0.0,
+                        IsGoodMatch = false
+                    });
+                }
+
+                progressCallback?.Report($"Hoàn thành! Tìm được {results.Count(r => r.IsGoodMatch)} matches tốt trong tổng số {results.Count} reference rows.");
+
+                return OperationResult<List<MatchResult>>.Success(results.OrderBy(r => r.ReferenceRow.OriginalIndex).ToList());
+            }
+            catch (Exception ex)
+            {
+                return OperationResult<List<MatchResult>>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.UnexpectedError,
+                    Severity = ErrorSeverity.Critical,
+                    UserMessage = "Lỗi không mong muốn khi tìm matches.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng thử lại hoặc liên hệ hỗ trợ.",
+                    OriginalException = ex
                 });
             }
+        }
 
-            progressCallback?.Report($"Hoàn thành! Tìm được {results.Count(r => r.IsGoodMatch)} matches tốt trong tổng số {results.Count} reference rows.");
+        /// <summary>
+        /// Generates line-by-line report without reordering
+        /// </summary>
+        /// <param name="referenceRows">Reference content rows</param>
+        /// <param name="targetRows">Target content rows</param>
+        /// <param name="progressCallback">Optional progress callback</param>
+        /// <returns>OperationResult containing list of line-by-line match results or error info</returns>
+        public async Task<OperationResult<List<LineByLineMatchResult>>> GenerateLineByLineReportAsync(
+            IEnumerable<ContentRow> referenceRows,
+            IEnumerable<ContentRow> targetRows,
+            IProgress<string>? progressCallback = null)
+        {
+            try
+            {
+                var refList = referenceRows?.ToList();
+                var targetList = targetRows?.ToList();
 
-            return results.OrderBy(r => r.ReferenceRow.OriginalIndex).ToList();
+                if (refList == null || refList.Count == 0)
+                {
+                    return OperationResult<List<LineByLineMatchResult>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.High,
+                        UserMessage = "Không có dữ liệu reference để so sánh.",
+                        TechnicalDetails = "Reference rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo file reference có dữ liệu hợp lệ."
+                    });
+                }
+
+                if (targetList == null || targetList.Count == 0)
+                {
+                    return OperationResult<List<LineByLineMatchResult>>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.High,
+                        UserMessage = "Không có dữ liệu target để so sánh.",
+                        TechnicalDetails = "Target rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo file target có dữ liệu hợp lệ."
+                    });
+                }
+
+                var results = new List<LineByLineMatchResult>();
+
+                if (refList.Count != targetList.Count)
+                {
+                    progressCallback?.Report("Warning: Reference và target có số dòng khác nhau. So sánh theo số dòng ít hơn.");
+                }
+
+                var minLength = Math.Min(refList.Count, targetList.Count);
+                var refWithEmbeddings = refList.Where(r => r.EmbeddingVector != null).ToList();
+                var processed = 0;
+
+                progressCallback?.Report($"Bắt đầu so sánh line-by-line cho {minLength} dòng...");
+
+                for (int i = 0; i < minLength; i++)
+                {
+                    var targetRow = targetList[i];
+                    var refRow = refList[i];
+
+                    if (targetRow.EmbeddingVector == null || refRow.EmbeddingVector == null)
+                    {
+                        results.Add(new LineByLineMatchResult
+                        {
+                            TargetRow = targetRow,
+                            CorrespondingReferenceRow = refRow,
+                            LineByLineScore = 0.0,
+                            IsGoodLineByLineMatch = false,
+                            SuggestedMatch = null
+                        });
+                        continue;
+                    }
+
+                    var lineScore = GeminiEmbeddingService.CalculateCosineSimilarity(
+                        refRow.EmbeddingVector,
+                        targetRow.EmbeddingVector);
+
+                    bool isGood = lineScore >= _similarityThreshold;
+
+                    MatchResult? suggestion = null;
+                    if (!isGood)
+                    {
+                        // Find best match from all references, without used tracking
+                        suggestion = await FindBestMatchAsync(targetRow, refWithEmbeddings, new HashSet<int>());
+                    }
+
+                    results.Add(new LineByLineMatchResult
+                    {
+                        TargetRow = targetRow,
+                        CorrespondingReferenceRow = refRow,
+                        LineByLineScore = lineScore,
+                        IsGoodLineByLineMatch = isGood,
+                        SuggestedMatch = suggestion
+                    });
+
+                    processed++;
+                    if (processed % 10 == 0 || processed == minLength)
+                    {
+                        progressCallback?.Report($"Đã xử lý {processed}/{minLength} dòng...");
+                    }
+                }
+
+                // Handle extra rows if lengths differ
+                if (targetList.Count > refList.Count)
+                {
+                    for (int i = minLength; i < targetList.Count; i++)
+                    {
+                        var suggestion = await FindBestMatchAsync(targetList[i], refWithEmbeddings, new HashSet<int>());
+                        results.Add(new LineByLineMatchResult
+                        {
+                            TargetRow = targetList[i],
+                            CorrespondingReferenceRow = null,
+                            LineByLineScore = 0.0,
+                            IsGoodLineByLineMatch = false,
+                            SuggestedMatch = suggestion
+                        });
+                    }
+                }
+
+                progressCallback?.Report("Hoàn thành so sánh line-by-line.");
+
+                return OperationResult<List<LineByLineMatchResult>>.Success(results);
+            }
+            catch (Exception ex)
+            {
+                return OperationResult<List<LineByLineMatchResult>>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.UnexpectedError,
+                    Severity = ErrorSeverity.Critical,
+                    UserMessage = "Lỗi không mong muốn khi tạo báo cáo line-by-line.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng thử lại hoặc liên hệ hỗ trợ.",
+                    OriginalException = ex
+                });
+            }
         }
 
         /// <summary>
@@ -204,100 +394,6 @@ namespace Tcma.LanguageComparison.Core.Services
                 AverageSimilarityScore = results.Any() ? results.Average(r => r.SimilarityScore) : 0
             };
         }
-
-        /// <summary>
-        /// Generates line-by-line report without reordering
-        /// </summary>
-        /// <param name="referenceRows">Reference content rows</param>
-        /// <param name="targetRows">Target content rows</param>
-        /// <param name="progressCallback">Optional progress callback</param>
-        /// <returns>List of line-by-line match results</returns>
-        public async Task<List<LineByLineMatchResult>> GenerateLineByLineReportAsync(
-            IEnumerable<ContentRow> referenceRows,
-            IEnumerable<ContentRow> targetRows,
-            IProgress<string>? progressCallback = null)
-        {
-            var refList = referenceRows.ToList();
-            var targetList = targetRows.ToList();
-            var results = new List<LineByLineMatchResult>();
-
-            if (refList.Count != targetList.Count)
-            {
-                progressCallback?.Report("Warning: Reference and target have different number of rows. Comparing up to minimum length.");
-            }
-
-            var minLength = Math.Min(refList.Count, targetList.Count);
-            var refWithEmbeddings = refList.Where(r => r.EmbeddingVector != null).ToList();
-            var processed = 0;
-
-            for (int i = 0; i < minLength; i++)
-            {
-                var targetRow = targetList[i];
-                var refRow = refList[i];
-
-                if (targetRow.EmbeddingVector == null || refRow.EmbeddingVector == null)
-                {
-                    results.Add(new LineByLineMatchResult
-                    {
-                        TargetRow = targetRow,
-                        CorrespondingReferenceRow = refRow,
-                        LineByLineScore = 0.0,
-                        IsGoodLineByLineMatch = false,
-                        SuggestedMatch = null
-                    });
-                    continue;
-                }
-
-                var lineScore = GeminiEmbeddingService.CalculateCosineSimilarity(
-                    refRow.EmbeddingVector,
-                    targetRow.EmbeddingVector);
-
-                bool isGood = lineScore >= _similarityThreshold;
-
-                MatchResult? suggestion = null;
-                if (!isGood)
-                {
-                    // Find best match from all references, without used tracking
-                    suggestion = await FindBestMatchAsync(targetRow, refWithEmbeddings, new HashSet<int>());
-                }
-
-                results.Add(new LineByLineMatchResult
-                {
-                    TargetRow = targetRow,
-                    CorrespondingReferenceRow = refRow,
-                    LineByLineScore = lineScore,
-                    IsGoodLineByLineMatch = isGood,
-                    SuggestedMatch = suggestion
-                });
-
-                processed++;
-                if (processed % 10 == 0 || processed == minLength)
-                {
-                    progressCallback?.Report($"Processed {processed}/{minLength} rows...");
-                }
-            }
-
-            // Handle extra rows if lengths differ
-            if (targetList.Count > refList.Count)
-            {
-                for (int i = minLength; i < targetList.Count; i++)
-                {
-                    results.Add(new LineByLineMatchResult
-                    {
-                        TargetRow = targetList[i],
-                        CorrespondingReferenceRow = null,
-                        LineByLineScore = 0.0,
-                        IsGoodLineByLineMatch = false,
-                        SuggestedMatch = await FindBestMatchAsync(targetList[i], refWithEmbeddings, new HashSet<int>())
-                    });
-                }
-            }
-
-            progressCallback?.Report("Line-by-line report generation completed.");
-
-            return results;
-        }
-
     }
 
     /// <summary>

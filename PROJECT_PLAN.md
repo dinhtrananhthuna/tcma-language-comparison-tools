@@ -87,9 +87,85 @@ The core of the solution will be based on **Text Embeddings**.
 
 -   [ ] **4.1. Configurable Threshold:**
     -   Add a setting (e.g., a slider or numeric input) that allows the user to define the minimum similarity score required to be considered a "good match".
--   [ ] **4.2. Error Handling:**
+-   [✅] **4.2. Error Handling:**
     -   Implement robust error handling for file I/O errors, invalid CSV formats, and API call failures (e.g., invalid API key, network issues).
--   [ ] **4.3. User Feedback:**
-    -   Display clear status messages to the user (e.g., "Processing...", "Comparison Complete", "Error: ...").
--   [ ] **4.4. Manual Override (Optional):**
-    -   (Advanced) Add functionality for the user to manually correct a match proposed by the AI. 
+    
+    **📊 Current Status Analysis:**
+    
+    **🟢 Already Implemented:**
+    - Basic try-catch blocks in MainWindow for Compare/Export operations
+    - Input validation for settings (threshold range, API key)
+    - File existence check in CsvReaderService
+    - API authentication validation in GeminiEmbeddingService
+    - Progress reporting for user feedback
+    
+    **🔴 Implementation Plan - Error Handling Enhancement:**
+    
+    **Phase 1: Core Error Infrastructure ✅**
+    - [✅] **ErrorTypes.cs**: Created comprehensive error classification system
+        - ErrorCategory enum (FileAccess, DataValidation, NetworkConnection, etc.)
+        - ErrorSeverity levels (Low, Medium, High, Critical)
+        - ErrorInfo record for structured error information
+        - OperationResult<T> wrapper for success/failure handling
+        - CommonErrors static class with pre-defined error templates
+    
+    - [✅] **ErrorHandlingService**: Centralized error processing service
+        - Exception pattern matching and intelligent error classification
+        - Integration with progress bar and status display
+        - Network connectivity testing
+        - Intelligent recovery guidance
+        - Structured logging capability
+    
+    **Phase 2: Service Layer Integration 🔄**
+    - [ ] **Enhanced CsvReaderService**: 
+        - Comprehensive CSV validation (format, encoding, headers)
+        - Empty file detection and handling
+        - Large file optimization with progress reporting
+        - File permission and corruption detection
+    
+    - [ ] **Improved GeminiEmbeddingService**:
+        - Retry logic with exponential backoff for API calls
+        - Rate limiting detection and handling (429 errors)
+        - Specific error handling for different API response codes
+        - Network timeout configuration and handling
+    
+    - [ ] **Enhanced ContentMatchingService**:
+        - Validation for matching data requirements
+        - Edge case handling (empty files, single row data)
+        - Progress reporting during long operations
+    
+    **Phase 3: UI Integration 🔄**
+    - [ ] **MainWindow Error Integration**:
+        - Replace basic try-catch with ErrorHandlingService
+        - Enhanced progress bar integration with error states
+        - User-friendly error dialogs with recovery suggestions
+        - Status bar integration for real-time error feedback
+    
+    - [ ] **Settings Window Enhancement**:
+        - API key validation with real-time testing
+        - Configuration error handling and validation
+        - User guidance for common setup issues
+    
+    **Phase 4: Advanced Features 📋**
+    - [ ] **Retry Mechanisms**:
+        - Automatic retry for transient network errors
+        - User-controlled retry options for API failures
+        - Smart retry delays based on error type
+    
+    - [ ] **Error Recovery**:
+        - Partial operation recovery (continue with successful embeddings)
+        - Graceful degradation for non-critical errors
+        - User choice for continuing after warnings
+    
+    - [ ] **Enhanced Logging**:
+        - File-based error logging for troubleshooting
+        - Error reporting/telemetry (optional)
+        - Performance monitoring integration
+    
+    **🎯 Key Benefits:**
+    - **Consistent Error Experience**: Standardized error handling across all components
+    - **User-Friendly Messages**: Clear Vietnamese error messages with actionable guidance
+    - **Intelligent Recovery**: Context-aware error analysis and suggestions
+    - **Progress Integration**: Seamless integration with existing progress/status system
+    - **Maintainable Code**: Centralized error logic reduces code duplication
+    - **Better Debugging**: Structured logging and error tracking 

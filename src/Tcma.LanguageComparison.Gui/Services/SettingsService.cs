@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Tcma.LanguageComparison.Core.Models;
 
 namespace Tcma.LanguageComparison.Gui.Services;
 
@@ -26,7 +27,7 @@ public class SettingsService
 
     public event EventHandler<UserSettings>? SettingsChanged;
 
-    public async Task LoadSettingsAsync()
+    public async Task<OperationResult<UserSettings>> LoadSettingsAsync()
     {
         try
         {
@@ -39,11 +40,13 @@ public class SettingsService
                     _settings = settings;
                 }
             }
+            return OperationResult<UserSettings>.Success(_settings);
         }
         catch (Exception)
         {
             // If loading fails, keep default settings
             _settings = new UserSettings();
+            return OperationResult<UserSettings>.Success(_settings);
         }
     }
 
