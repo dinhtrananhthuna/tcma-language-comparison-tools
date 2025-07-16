@@ -210,6 +210,9 @@ namespace Tcma.LanguageComparison.Core.Services
                 pageInfo.Progress = 20;
                 progress?.Report($"Đã tải {referenceRows.Count} reference và {targetRows.Count} target rows");
 
+                // Lưu trữ nội dung gốc trước khi dịch
+                var originalTargetRows = targetRows.ToList();
+
                 // Dịch toàn bộ targetRows sang tiếng Anh
                 progress?.Report("Đang dịch nội dung target sang tiếng Anh bằng Gemini Flash...");
                 var translateResult = await _translationService.TranslateBatchAsync(targetRows, "auto", "en");
@@ -311,6 +314,8 @@ namespace Tcma.LanguageComparison.Core.Services
                     PageInfo = pageInfo,
                     Results = lineByLineResults,
                     ProcessedAt = DateTime.Now,
+                    OriginalTargetRows = originalTargetRows,
+                    TranslationResults = translated,
                     Statistics = new PageStatistics
                     {
                         TotalReferenceRows = stats.TotalReferenceRows,

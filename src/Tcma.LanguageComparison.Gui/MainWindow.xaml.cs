@@ -190,6 +190,9 @@ public partial class MainWindow : Window
             var targetResult = await csvReader.ReadContentRowsAsync(_targetFilePath);
             if (!targetResult.IsSuccess) throw new Exception(targetResult.Error!.UserMessage);
             var targetRows = targetResult.Data!;
+            
+            // Lưu trữ nội dung gốc trước khi dịch
+            var originalTargetRows = targetRows.ToList();
 
             ShowProgress($"Processing {referenceRows.Count} reference rows and {targetRows.Count} target rows...");
 
@@ -243,7 +246,7 @@ public partial class MainWindow : Window
             ShowProgress("Updating results...");
             
             // Convert comparison results to aligned display data
-            var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(referenceRows, targetRows);
+            var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translated);
             
             await Dispatcher.InvokeAsync(() =>
             {
@@ -602,8 +605,12 @@ public partial class MainWindow : Window
                     .Select(r => r.TargetRow)
                     .ToList();
                 
-                // Convert to aligned display data
-                var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(referenceRows, targetRows);
+                // Convert to aligned display data với original target và translation results
+                var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(
+                    referenceRows, 
+                    targetRows, 
+                    pageResult.OriginalTargetRows, 
+                    pageResult.TranslationResults);
                 
                 _multiPageResultsCache[pageInfo.PageName] = alignedDisplayData;
                 MultiPageResultsDataGrid.ItemsSource = alignedDisplayData;
@@ -680,10 +687,14 @@ public partial class MainWindow : Window
     /// <summary>
     /// Convert raw data to aligned display data using ContentMatchingService
     /// </summary>
-    private async Task<List<AlignedDisplayRow>> ConvertToAlignedDisplayDataAsync(List<ContentRow> referenceRows, List<ContentRow> targetRows)
+    private async Task<List<AlignedDisplayRow>> ConvertToAlignedDisplayDataAsync(
+        List<ContentRow> referenceRows, 
+        List<ContentRow> targetRows,
+        List<ContentRow>? originalTargetRows = null,
+        List<TranslationResult>? translationResults = null)
     {
         var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
-        return await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows);
+        return await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translationResults);
     }
 
     #endregion

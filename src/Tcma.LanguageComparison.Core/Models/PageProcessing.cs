@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Tcma.LanguageComparison.Core.Services;
 
 namespace Tcma.LanguageComparison.Core.Models
 {
@@ -205,6 +206,16 @@ namespace Tcma.LanguageComparison.Core.Models
         /// Processing statistics
         /// </summary>
         public PageStatistics Statistics { get; set; } = new();
+        
+        /// <summary>
+        /// Original target rows (before translation)
+        /// </summary>
+        public List<ContentRow> OriginalTargetRows { get; set; } = new();
+        
+        /// <summary>
+        /// Translation results from AI
+        /// </summary>
+        public List<TranslationResult> TranslationResults { get; set; } = new();
         
         /// <summary>
         /// Whether the processing was successful

@@ -401,7 +401,7 @@
                                         </DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="100"/>
-                                    <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="400">
+                                    <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="300">
                                         <DataGridTextColumn.ElementStyle>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="TextWrapping" Value="Wrap"/>
@@ -409,9 +409,18 @@
                                             </Style>
                                         </DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120"/>
-                                    <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="120"/>
-                                    <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="130"/>
+                                    <DataGridTextColumn Header="Translated Content" Binding="{Binding TranslatedContent}" Width="300">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                                <Setter Property="Foreground" Value="#0066CC"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                                    <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="100"/>
+                                    <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="110"/>
                                 </DataGrid.Columns>
                                 <DataGrid.RowStyle>
                                     <Style TargetType="DataGridRow">
@@ -455,7 +464,7 @@
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
                         <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="80"/>
-                        <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="300">
+                        <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="250">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="TextWrapping" Value="Wrap"/>
@@ -463,9 +472,18 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110"/>
-                        <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="120"/>
-                        <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="120"/>
+                        <DataGridTextColumn Header="Translated Content" Binding="{Binding TranslatedContent}" Width="250">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Foreground" Value="#0066CC"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                        <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="100"/>
+                        <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="100"/>
                     </DataGrid.Columns>
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
@@ -512,3 +530,4 @@
         
     </Grid>
 </Window>
+

@@ -522,6 +522,23 @@ namespace Tcma.LanguageComparison.Core.Services
             List<TranslationResult>? translationResults = null,
             IProgress<string>? progressCallback = null)
         {
+            // Debug logging
+            Console.WriteLine($"🔍 [GenerateAlignedDisplayDataAsync] Debug Info:");
+            Console.WriteLine($"   - referenceRows.Count: {referenceRows.Count}");
+            Console.WriteLine($"   - targetRows.Count: {targetRows.Count}");
+            Console.WriteLine($"   - originalTargetRows: {(originalTargetRows == null ? "NULL" : $"{originalTargetRows.Count} items")}");
+            Console.WriteLine($"   - translationResults: {(translationResults == null ? "NULL" : $"{translationResults.Count} items")}");
+            
+            if (originalTargetRows != null && originalTargetRows.Count > 0)
+            {
+                Console.WriteLine($"   - Sample originalTargetRows[0]: ContentId='{originalTargetRows[0].ContentId}', Content='{originalTargetRows[0].Content[..Math.Min(50, originalTargetRows[0].Content.Length)]}...'");
+            }
+            
+            if (translationResults != null && translationResults.Count > 0)
+            {
+                Console.WriteLine($"   - Sample translationResults[0]: ContentId='{translationResults[0].ContentId}', TranslatedContent='{translationResults[0].TranslatedContent[..Math.Min(50, translationResults[0].TranslatedContent.Length)]}...'");
+            }
+            
             // Sử dụng lại logic từ GenerateAlignedTargetFileAsync
             var alignedResult = await GenerateAlignedTargetFileAsync(referenceRows, targetRows, progressCallback);
             
@@ -530,6 +547,9 @@ namespace Tcma.LanguageComparison.Core.Services
             // Tạo dictionary để lookup nội dung gốc và dịch
             var originalContentMap = originalTargetRows?.ToDictionary(r => r.ContentId, r => r.Content) ?? new Dictionary<string, string>();
             var translationMap = translationResults?.ToDictionary(t => t.ContentId, t => t.TranslatedContent) ?? new Dictionary<string, string>();
+            
+            Console.WriteLine($"   - originalContentMap.Count: {originalContentMap.Count}");
+            Console.WriteLine($"   - translationMap.Count: {translationMap.Count}");
             
             // Thêm các dòng aligned theo thứ tự reference
             for (int i = 0; i < alignedResult.AlignedRows.Count; i++)
@@ -545,6 +565,15 @@ namespace Tcma.LanguageComparison.Core.Services
                     var contentId = alignedRow.TargetRow.ContentId;
                     originalContent = originalContentMap.GetValueOrDefault(contentId, alignedRow.TargetRow.Content);
                     translatedContent = translationMap.GetValueOrDefault(contentId, string.Empty);
+                    
+                    // Debug cho item đầu tiên
+                    if (i == 0)
+                    {
+                        Console.WriteLine($"   - First item mapping: ContentId='{contentId}'");
+                        Console.WriteLine($"     * alignedRow.TargetRow.Content: '{alignedRow.TargetRow.Content[..Math.Min(50, alignedRow.TargetRow.Content.Length)]}...'");
+                        Console.WriteLine($"     * originalContent: '{originalContent[..Math.Min(50, originalContent.Length)]}...'");
+                        Console.WriteLine($"     * translatedContent: '{translatedContent[..Math.Min(50, translatedContent.Length)]}...'");
+                    }
                 }
                 
                 // Tạo AlignedDisplayRow với nội dung gốc (TargetContent) và bản dịch (TranslatedContent)
@@ -596,6 +625,13 @@ namespace Tcma.LanguageComparison.Core.Services
                     };
                     displayRows.Add(unmatchedDisplayRow);
                 }
+            }
+            
+            Console.WriteLine($"   - Generated {displayRows.Count} display rows");
+            if (displayRows.Count > 0)
+            {
+                var firstRow = displayRows[0];
+                Console.WriteLine($"   - First row: TargetContent='{firstRow.TargetContent[..Math.Min(50, firstRow.TargetContent.Length)]}...', TranslatedContent='{firstRow.TranslatedContent[..Math.Min(50, firstRow.TranslatedContent.Length)]}...'");
             }
             
             return displayRows;
