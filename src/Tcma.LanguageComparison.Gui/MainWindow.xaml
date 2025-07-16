@@ -409,8 +409,9 @@
                                             </Style>
                                         </DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
-                                    <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="150"/>
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120"/>
+                                    <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="120"/>
+                                    <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="130"/>
                                 </DataGrid.Columns>
                                 <DataGrid.RowStyle>
                                     <Style TargetType="DataGridRow">
@@ -462,7 +463,8 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110"/>
+                        <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="120"/>
                         <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="120"/>
                     </DataGrid.Columns>
                     <DataGrid.RowStyle>

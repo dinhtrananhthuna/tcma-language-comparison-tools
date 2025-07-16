@@ -286,7 +286,7 @@ namespace Tcma.LanguageComparison.Core.Services
         }
 
         /// <summary>
-        /// Export aligned display data to CSV file
+        /// Export aligned display data to CSV file (bao gồm cả unmatched target rows)
         /// </summary>
         public async Task<OperationResult<bool>> ExportAlignedDisplayRowsAsync(string filePath, List<AlignedDisplayRow> alignedDisplayRows)
         {
@@ -325,24 +325,37 @@ namespace Tcma.LanguageComparison.Core.Services
                 csv.WriteField("Content");
                 csv.WriteField("Status");
                 csv.WriteField("SimilarityScore");
+                csv.WriteField("RowType");
                 csv.NextRecord();
 
-                // Write rows - chỉ target content và status
+                // Write rows - bao gồm tất cả các loại dòng
                 foreach (var displayRow in alignedDisplayRows)
                 {
-                    if (displayRow.Status == "Matched" && !string.IsNullOrEmpty(displayRow.TargetContent))
+                    switch (displayRow.Status)
                     {
-                        csv.WriteField(displayRow.TargetContentId); // Sử dụng ContentId thật từ target
-                        csv.WriteField(displayRow.TargetContent);
-                        csv.WriteField("Matched");
-                        csv.WriteField(displayRow.SimilarityScore?.ToString("F3") ?? "");
-                    }
-                    else
-                    {
-                        csv.WriteField("");
-                        csv.WriteField("");
-                        csv.WriteField("Missing");
-                        csv.WriteField("");
+                        case "Matched":
+                            csv.WriteField(displayRow.TargetContentId);
+                            csv.WriteField(displayRow.TargetContent);
+                            csv.WriteField("Matched");
+                            csv.WriteField(displayRow.SimilarityScore?.ToString("F3") ?? "");
+                            csv.WriteField("Reference Aligned");
+                            break;
+                        
+                        case "Unmatched Target":
+                            csv.WriteField(displayRow.TargetContentId);
+                            csv.WriteField(displayRow.TargetContent);
+                            csv.WriteField("Unmatched Target");
+                            csv.WriteField(""); // No similarity score for unmatched
+                            csv.WriteField("Extra Target");
+                            break;
+                            
+                        default: // Missing or other statuses
+                            csv.WriteField("");
+                            csv.WriteField("");
+                            csv.WriteField(displayRow.Status);
+                            csv.WriteField("");
+                            csv.WriteField("Reference Aligned");
+                            break;
                     }
                     csv.NextRecord();
                 }

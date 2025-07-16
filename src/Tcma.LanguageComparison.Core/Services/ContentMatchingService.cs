@@ -502,11 +502,12 @@ namespace Tcma.LanguageComparison.Core.Services
 
         /// <summary>
         /// Tạo dữ liệu aligned để hiển thị trong DataGrid (sử dụng chung thuật toán với export)
+        /// Bao gồm cả những dòng target không match ở cuối danh sách
         /// </summary>
         /// <param name="referenceRows">Danh sách reference rows đã có embedding</param>
         /// <param name="targetRows">Danh sách target rows đã có embedding</param>
         /// <param name="progressCallback">Optional progress callback</param>
-        /// <returns>Danh sách AlignedDisplayRow theo thứ tự reference</returns>
+        /// <returns>Danh sách AlignedDisplayRow theo thứ tự reference, sau đó là unmatched target rows</returns>
         public async Task<List<AlignedDisplayRow>> GenerateAlignedDisplayDataAsync(
             List<ContentRow> referenceRows, 
             List<ContentRow> targetRows, 
@@ -517,6 +518,7 @@ namespace Tcma.LanguageComparison.Core.Services
             
             var displayRows = new List<AlignedDisplayRow>();
             
+            // Thêm các dòng aligned theo thứ tự reference
             for (int i = 0; i < alignedResult.AlignedRows.Count; i++)
             {
                 var alignedRow = alignedResult.AlignedRows[i];
@@ -524,6 +526,18 @@ namespace Tcma.LanguageComparison.Core.Services
                 
                 var displayRow = AlignedDisplayRow.FromAlignedTargetRow(alignedRow, referenceRow);
                 displayRows.Add(displayRow);
+            }
+            
+            // Thêm các dòng target không match ở cuối danh sách (nếu có)
+            if (alignedResult.UnusedTargetRows.Any())
+            {
+                progressCallback?.Report($"Thêm {alignedResult.UnusedTargetRows.Count} dòng target không match vào cuối danh sách...");
+                
+                foreach (var unmatchedTargetRow in alignedResult.UnusedTargetRows.OrderBy(t => t.OriginalIndex))
+                {
+                    var unmatchedDisplayRow = AlignedDisplayRow.FromUnmatchedTargetRow(unmatchedTargetRow);
+                    displayRows.Add(unmatchedDisplayRow);
+                }
             }
             
             return displayRows;

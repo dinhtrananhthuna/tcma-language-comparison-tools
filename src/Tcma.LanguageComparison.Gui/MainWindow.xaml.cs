@@ -233,16 +233,24 @@ public partial class MainWindow : Window
             });
 
             // Update statistics
+            var referenceAlignedRows = alignedDisplayData.Where(r => r.RowType == AlignedRowType.ReferenceAligned).ToList();
+            var unmatchedTargetRows = alignedDisplayData.Where(r => r.RowType == AlignedRowType.UnmatchedTarget).ToList();
+            
             var stats = new MatchingStatistics
             {
                 TotalReferenceRows = referenceRows.Count,
-                GoodMatches = _comparisonResults.Count(r => r.Quality != MatchQuality.Poor),
-                HighQualityMatches = _comparisonResults.Count(r => r.Quality == MatchQuality.High),
-                MediumQualityMatches = _comparisonResults.Count(r => r.Quality == MatchQuality.Medium),
-                LowQualityMatches = _comparisonResults.Count(r => r.Quality == MatchQuality.Low)
+                GoodMatches = referenceAlignedRows.Count(r => r.Status == "Matched"),
+                HighQualityMatches = referenceAlignedRows.Count(r => r.Quality == MatchQuality.High),
+                MediumQualityMatches = referenceAlignedRows.Count(r => r.Quality == MatchQuality.Medium),
+                LowQualityMatches = referenceAlignedRows.Count(r => r.Quality == MatchQuality.Low),
+                PoorQualityMatches = referenceAlignedRows.Count(r => r.Quality == MatchQuality.Poor),
+                MatchPercentage = referenceRows.Count > 0 ? (double)referenceAlignedRows.Count(r => r.Status == "Matched") / referenceRows.Count * 100 : 0,
+                AverageSimilarityScore = referenceAlignedRows.Where(r => r.SimilarityScore.HasValue).Any() ? 
+                    referenceAlignedRows.Where(r => r.SimilarityScore.HasValue).Average(r => r.SimilarityScore!.Value) : 0
             };
 
-            UpdateStatistics(stats);
+            // Update statistics display with unmatched target info
+            UpdateStatistics(stats, unmatchedTargetRows.Count, targetRows.Count);
             ExportButton.IsEnabled = true;
 
             ShowProgress("Comparison completed successfully.");
@@ -359,14 +367,20 @@ public partial class MainWindow : Window
         MessageBox.Show(message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
-    private void UpdateStatistics(MatchingStatistics stats)
+    private void UpdateStatistics(MatchingStatistics stats, int unmatchedTargetCount = 0, int totalTargetRows = 0)
     {
-        StatisticsTextBlock.Text = $"Results: {stats.TotalReferenceRows} total | " +
-                                  $"Good matches: {stats.GoodMatches} | " +
-                                  $"High: {stats.HighQualityMatches} | " +
-                                  $"Medium: {stats.MediumQualityMatches} | " +
-                                  $"Low: {stats.LowQualityMatches} | " +
-                                  $"Match rate: {stats.MatchPercentage:F1}%";
+        var baseStats = $"Results: {stats.TotalReferenceRows} ref rows | " +
+                       $"Good matches: {stats.GoodMatches} | " +
+                       $"High: {stats.HighQualityMatches} | " +
+                       $"Medium: {stats.MediumQualityMatches} | " +
+                       $"Low: {stats.LowQualityMatches} | " +
+                       $"Match rate: {stats.MatchPercentage:F1}%";
+        
+        var targetStats = unmatchedTargetCount > 0 
+            ? $" | Target: {totalTargetRows} total, {unmatchedTargetCount} unmatched"
+            : "";
+            
+        StatisticsTextBlock.Text = baseStats + targetStats;
     }
 
     #endregion
@@ -707,5 +721,7 @@ public class MatchingStatistics
     public int HighQualityMatches { get; set; }
     public int MediumQualityMatches { get; set; }
     public int LowQualityMatches { get; set; }
-    public double MatchPercentage => TotalReferenceRows > 0 ? (double)GoodMatches / TotalReferenceRows * 100 : 0;
+    public int PoorQualityMatches { get; set; }
+    public double MatchPercentage { get; set; }
+    public double AverageSimilarityScore { get; set; }
 }
