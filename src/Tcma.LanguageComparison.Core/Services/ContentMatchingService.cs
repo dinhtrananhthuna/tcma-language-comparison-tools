@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Tcma.LanguageComparison.Core.Models;
+using Tcma.LanguageComparison.Core.Services;
 
 namespace Tcma.LanguageComparison.Core.Services
 {
@@ -505,12 +510,16 @@ namespace Tcma.LanguageComparison.Core.Services
         /// Bao gồm cả những dòng target không match ở cuối danh sách
         /// </summary>
         /// <param name="referenceRows">Danh sách reference rows đã có embedding</param>
-        /// <param name="targetRows">Danh sách target rows đã có embedding</param>
+        /// <param name="targetRows">Danh sách target rows đã có embedding (đã dịch)</param>
+        /// <param name="originalTargetRows">Danh sách target rows gốc (chưa dịch)</param>
+        /// <param name="translationResults">Kết quả dịch từ translation service</param>
         /// <param name="progressCallback">Optional progress callback</param>
         /// <returns>Danh sách AlignedDisplayRow theo thứ tự reference, sau đó là unmatched target rows</returns>
         public async Task<List<AlignedDisplayRow>> GenerateAlignedDisplayDataAsync(
             List<ContentRow> referenceRows, 
-            List<ContentRow> targetRows, 
+            List<ContentRow> targetRows,
+            List<ContentRow>? originalTargetRows = null,
+            List<TranslationResult>? translationResults = null,
             IProgress<string>? progressCallback = null)
         {
             // Sử dụng lại logic từ GenerateAlignedTargetFileAsync
@@ -518,13 +527,46 @@ namespace Tcma.LanguageComparison.Core.Services
             
             var displayRows = new List<AlignedDisplayRow>();
             
+            // Tạo dictionary để lookup nội dung gốc và dịch
+            var originalContentMap = originalTargetRows?.ToDictionary(r => r.ContentId, r => r.Content) ?? new Dictionary<string, string>();
+            var translationMap = translationResults?.ToDictionary(t => t.ContentId, t => t.TranslatedContent) ?? new Dictionary<string, string>();
+            
             // Thêm các dòng aligned theo thứ tự reference
             for (int i = 0; i < alignedResult.AlignedRows.Count; i++)
             {
                 var alignedRow = alignedResult.AlignedRows[i];
                 var referenceRow = referenceRows[alignedRow.ReferenceIndex];
                 
-                var displayRow = AlignedDisplayRow.FromAlignedTargetRow(alignedRow, referenceRow);
+                string originalContent = string.Empty;
+                string translatedContent = string.Empty;
+                
+                if (alignedRow.TargetRow != null)
+                {
+                    var contentId = alignedRow.TargetRow.ContentId;
+                    originalContent = originalContentMap.GetValueOrDefault(contentId, alignedRow.TargetRow.Content);
+                    translatedContent = translationMap.GetValueOrDefault(contentId, string.Empty);
+                }
+                
+                // Tạo AlignedDisplayRow với nội dung gốc (TargetContent) và bản dịch (TranslatedContent)
+                var displayRow = new AlignedDisplayRow
+                {
+                    RowType = AlignedRowType.ReferenceAligned,
+                    RefLineNumber = alignedRow.ReferenceIndex + 1,
+                    RefContent = referenceRow.Content,
+                    TargetLineNumber = alignedRow.TargetRow?.OriginalIndex + 1,
+                    TargetContent = originalContent, // Nội dung gốc (tiếng Trung)
+                    TranslatedContent = translatedContent, // Bản dịch (tiếng Anh)
+                    TargetContentId = alignedRow.TargetRow?.ContentId ?? string.Empty,
+                    Status = alignedRow.Status,
+                    SimilarityScore = alignedRow.SimilarityScore,
+                    Quality = alignedRow.SimilarityScore switch
+                    {
+                        >= 0.8 => MatchQuality.High,
+                        >= 0.6 => MatchQuality.Medium,
+                        >= 0.4 => MatchQuality.Low,
+                        _ => MatchQuality.Poor
+                    }
+                };
                 displayRows.Add(displayRow);
             }
             
@@ -535,7 +577,23 @@ namespace Tcma.LanguageComparison.Core.Services
                 
                 foreach (var unmatchedTargetRow in alignedResult.UnusedTargetRows.OrderBy(t => t.OriginalIndex))
                 {
-                    var unmatchedDisplayRow = AlignedDisplayRow.FromUnmatchedTargetRow(unmatchedTargetRow);
+                    var contentId = unmatchedTargetRow.ContentId;
+                    var originalContent = originalContentMap.GetValueOrDefault(contentId, unmatchedTargetRow.Content);
+                    var translatedContent = translationMap.GetValueOrDefault(contentId, string.Empty);
+                    
+                    var unmatchedDisplayRow = new AlignedDisplayRow
+                    {
+                        RowType = AlignedRowType.UnmatchedTarget,
+                        RefLineNumber = null,
+                        RefContent = string.Empty,
+                        TargetLineNumber = unmatchedTargetRow.OriginalIndex + 1,
+                        TargetContent = originalContent, // Nội dung gốc (tiếng Trung)
+                        TranslatedContent = translatedContent, // Bản dịch (tiếng Anh)
+                        TargetContentId = unmatchedTargetRow.ContentId,
+                        Status = "Unmatched Target",
+                        SimilarityScore = null,
+                        Quality = MatchQuality.Poor
+                    };
                     displayRows.Add(unmatchedDisplayRow);
                 }
             }

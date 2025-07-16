@@ -22,7 +22,7 @@ namespace Tcma.LanguageComparison.Core
                 
                 // File paths
                 var refFile = "sample/NX Essentials Google Ads Page_20250529-EN.csv";
-                var targetFile = "sample/NX Essentials Google Ads Page_20250529-DE.csv";
+                var targetFile = "sample/NX Essentials Google Ads Page_20250529-ZH.csv";
                 var outputFile = "test_output_aligned.csv";
                 
                 // Services
@@ -30,6 +30,7 @@ namespace Tcma.LanguageComparison.Core
                 var geminiService = new GeminiEmbeddingService(geminiApiKey);
                 var preprocessingService = new TextPreprocessingService();
                 var matchingService = new ContentMatchingService(0.35);
+                var translationService = new GeminiTranslationService(geminiApiKey);
                 
                 // Load files
                 Console.WriteLine("📂 Loading reference file (EN)...");
@@ -51,6 +52,30 @@ namespace Tcma.LanguageComparison.Core
                 }
                 var targetRows = targetResult.Data!;
                 Console.WriteLine($"   Loaded {targetRows.Count} target rows");
+                
+                // Lưu trữ nội dung gốc trước khi dịch
+                var originalTargetRows = targetRows.ToList();
+                
+                // Dịch targetRows sang tiếng Anh
+                Console.WriteLine("🌐 Translating target content to English using Gemini Flash...");
+                var translationProgress = new Progress<string>(msg => Console.WriteLine($"[Translate] {msg}"));
+                var translateResult = await translationService.TranslateBatchAsync(targetRows, "zh", "en", translationProgress);
+                if (!translateResult.IsSuccess)
+                {
+                    Console.WriteLine($"❌ Failed to translate target: {translateResult.Error?.UserMessage}");
+                    return;
+                }
+                var translated = translateResult.Data!;
+                var translatedDict = translated.ToDictionary(t => t.ContentId, t => t.TranslatedContent);
+                for (int i = 0; i < targetRows.Count; i++)
+                {
+                    var row = targetRows[i];
+                    if (translatedDict.TryGetValue(row.ContentId, out var trans))
+                    {
+                        targetRows[i] = row with { Content = trans };
+                    }
+                }
+                Console.WriteLine("🌐 Translation completed. Proceeding to preprocessing and embedding...");
                 
                 // Create reference ContentId map
                 var refContentMap = referenceRows.ToDictionary(r => r.ContentId, r => r.Content);
@@ -79,7 +104,7 @@ namespace Tcma.LanguageComparison.Core
                 
                 // Generate aligned display data
                 Console.WriteLine("\n⚡ Running alignment algorithm...");
-                var alignedData = await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows, null);
+                var alignedData = await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translated, null);
                 Console.WriteLine($"   Generated {alignedData.Count} aligned display rows");
                 
                 // Export result
@@ -93,7 +118,7 @@ namespace Tcma.LanguageComparison.Core
                 
                 // Analyze results
                 Console.WriteLine("\n📊 Analyzing alignment results...");
-                await AnalyzeAlignmentResults(refContentMap, outputFile, alignedData);
+                await AnalyzeAlignmentResults(refContentMap, outputFile, alignedData, referenceRows);
                 
             }
             catch (Exception ex)
@@ -106,7 +131,8 @@ namespace Tcma.LanguageComparison.Core
         private static async Task AnalyzeAlignmentResults(
             Dictionary<string, string> refContentMap, 
             string outputFile,
-            List<AlignedDisplayRow> alignedData)
+            List<AlignedDisplayRow> alignedData,
+            List<ContentRow> referenceRows)
         {
             try
             {
@@ -156,6 +182,31 @@ namespace Tcma.LanguageComparison.Core
                     {
                         Console.WriteLine($"      • ... and {contentIdMismatches.Count - 5} more");
                     }
+
+                    // Ghi báo cáo mismatch ra file CSV
+                    var mismatchFile = "test_output_mismatch.csv";
+                    using (var writer = new StreamWriter(mismatchFile, false, System.Text.Encoding.UTF8))
+                    {
+                        writer.WriteLine("Index,RefContentId,RefContent,TargetContentId,TargetContent,SimilarityScore,Status");
+                        int idx = 0;
+                        foreach (var row in matchedRows)
+                        {
+                            var targetContentId = row.TargetContentId;
+                            if (string.IsNullOrEmpty(targetContentId) || !refContentMap.ContainsKey(targetContentId))
+                            {
+                                string refContentId = string.Empty;
+                                if (row.RefLineNumber != null && row.RefLineNumber.Value > 0 && row.RefLineNumber.Value <= referenceRows.Count)
+                                {
+                                    refContentId = referenceRows[row.RefLineNumber.Value - 1].ContentId;
+                                }
+                                var refContent = row.RefContent?.Replace("\"", "''").Replace("\n", " ") ?? "";
+                                var targetContent = row.TargetContent?.Replace("\"", "''").Replace("\n", " ") ?? "";
+                                writer.WriteLine($"{idx},\"{refContentId}\",\"{refContent}\",\"{targetContentId}\",\"{targetContent}\",{row.SimilarityScore:F3},{row.Status}");
+                            }
+                            idx++;
+                        }
+                    }
+                    Console.WriteLine($"   📄 Exported mismatch report to {mismatchFile}");
                 }
                 
                 // Show some examples of successful matches

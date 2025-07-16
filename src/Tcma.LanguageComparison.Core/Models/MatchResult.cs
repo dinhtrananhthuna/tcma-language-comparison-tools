@@ -149,6 +149,11 @@ namespace Tcma.LanguageComparison.Core.Models
         public string TargetContent { get; init; } = string.Empty;
         
         /// <summary>
+        /// Bản dịch tiếng Anh của target content (từ AI), empty nếu không có dịch
+        /// </summary>
+        public string TranslatedContent { get; init; } = string.Empty;
+        
+        /// <summary>
         /// ContentId của target, empty nếu không có target content
         /// </summary>
         public string TargetContentId { get; init; } = string.Empty;
@@ -184,7 +189,7 @@ namespace Tcma.LanguageComparison.Core.Models
         /// <summary>
         /// Tạo từ AlignedTargetRow (cho reference-aligned rows)
         /// </summary>
-        public static AlignedDisplayRow FromAlignedTargetRow(AlignedTargetRow alignedRow, ContentRow referenceRow)
+        public static AlignedDisplayRow FromAlignedTargetRow(AlignedTargetRow alignedRow, ContentRow referenceRow, string translatedContent = "")
         {
             return new AlignedDisplayRow
             {
@@ -193,6 +198,7 @@ namespace Tcma.LanguageComparison.Core.Models
                 RefContent = referenceRow.Content,
                 TargetLineNumber = alignedRow.TargetRow?.OriginalIndex + 1,  // Convert to 1-based, null if no match
                 TargetContent = alignedRow.TargetRow?.Content ?? string.Empty,
+                TranslatedContent = translatedContent,
                 TargetContentId = alignedRow.TargetRow?.ContentId ?? string.Empty,
                 Status = alignedRow.Status,
                 SimilarityScore = alignedRow.SimilarityScore,
@@ -209,7 +215,7 @@ namespace Tcma.LanguageComparison.Core.Models
         /// <summary>
         /// Tạo từ ContentRow (cho unmatched target rows)
         /// </summary>
-        public static AlignedDisplayRow FromUnmatchedTargetRow(ContentRow unmatchedTargetRow)
+        public static AlignedDisplayRow FromUnmatchedTargetRow(ContentRow unmatchedTargetRow, string translatedContent = "")
         {
             return new AlignedDisplayRow
             {
@@ -218,6 +224,7 @@ namespace Tcma.LanguageComparison.Core.Models
                 RefContent = string.Empty,
                 TargetLineNumber = unmatchedTargetRow.OriginalIndex + 1,  // Convert to 1-based
                 TargetContent = unmatchedTargetRow.Content,
+                TranslatedContent = translatedContent,
                 TargetContentId = unmatchedTargetRow.ContentId,
                 Status = "Unmatched Target",
                 SimilarityScore = null,

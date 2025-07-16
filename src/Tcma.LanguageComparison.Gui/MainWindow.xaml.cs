@@ -171,6 +171,7 @@ public partial class MainWindow : Window
             var configService = new ConfigurationService();
             var geminiService = new GeminiEmbeddingService(_settingsService.ApiKey);
             var preprocessingService = new TextPreprocessingService();
+            var translationService = new GeminiTranslationService(_settingsService.ApiKey);
 
             ShowProgress("Testing API connection...");
             var testResult = await geminiService.TestConnectionAsync();
@@ -206,6 +207,26 @@ public partial class MainWindow : Window
             ShowProgress("Generating embeddings for reference content...");
             var referenceEmbeddingsResult = await geminiService.GenerateEmbeddingsAsync(referenceRows, progress);
             if (!referenceEmbeddingsResult.IsSuccess) throw new Exception(referenceEmbeddingsResult.Error!.UserMessage);
+
+            ShowProgress("Translating target content to English using Gemini Flash...");
+            var translationProgress = new Progress<string>(msg => Dispatcher.Invoke(() => ShowProgress($"[Translate] {msg}")));
+            var translateResult = await translationService.TranslateBatchAsync(targetRows, "auto", "en", translationProgress);
+            if (!translateResult.IsSuccess)
+            {
+                ShowError($"Failed to translate target: {translateResult.Error?.UserMessage}");
+                return;
+            }
+            var translated = translateResult.Data!;
+            var translatedDict = translated.ToDictionary(t => t.ContentId, t => t.TranslatedContent);
+            for (int i = 0; i < targetRows.Count; i++)
+            {
+                var row = targetRows[i];
+                if (translatedDict.TryGetValue(row.ContentId, out var trans))
+                {
+                    targetRows[i] = row with { Content = trans };
+                }
+            }
+            ShowProgress("Translation completed. Proceeding to preprocessing and embedding...");
 
             ShowProgress("Generating embeddings for target content...");
             var targetEmbeddingsResult = await geminiService.GenerateEmbeddingsAsync(targetRows, progress);
@@ -414,9 +435,9 @@ public partial class MainWindow : Window
         {
             var apiKey = _settingsService.ApiKey;
             var threshold = _settingsService.SimilarityThreshold;
-            
+            var translationService = new GeminiTranslationService(apiKey);
             _pageManagementService?.Dispose();
-            _pageManagementService = new PageManagementService(threshold, apiKey);
+            _pageManagementService = new PageManagementService(threshold, apiKey, translationService);
         }
         catch (Exception ex)
         {

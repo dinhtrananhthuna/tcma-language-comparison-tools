@@ -20,17 +20,20 @@ namespace Tcma.LanguageComparison.Core.Services
         private readonly CsvReaderService _csvReader;
         private readonly TextPreprocessingService _textPreprocessor;
         private readonly GeminiEmbeddingService _embeddingService;
+        private readonly IGeminiTranslationService _translationService;
         private bool _disposed = false;
 
         public PageManagementService(
             double similarityThreshold = 0.35,
-            string? apiKey = null)
+            string? apiKey = null,
+            IGeminiTranslationService? translationService = null)
         {
             _zipExtractor = new ZipExtractionService();
             _fileMatcher = new FileMatchingService();
             _contentMatcher = new ContentMatchingService(similarityThreshold);
             _csvReader = new CsvReaderService();
             _textPreprocessor = new TextPreprocessingService();
+            _translationService = translationService ?? throw new ArgumentNullException(nameof(translationService));
             
             if (!string.IsNullOrEmpty(apiKey))
             {
@@ -206,6 +209,29 @@ namespace Tcma.LanguageComparison.Core.Services
 
                 pageInfo.Progress = 20;
                 progress?.Report($"Đã tải {referenceRows.Count} reference và {targetRows.Count} target rows");
+
+                // Dịch toàn bộ targetRows sang tiếng Anh
+                progress?.Report("Đang dịch nội dung target sang tiếng Anh bằng Gemini Flash...");
+                var translateResult = await _translationService.TranslateBatchAsync(targetRows, "auto", "en");
+                if (!translateResult.IsSuccess)
+                {
+                    pageInfo.Status = PageStatus.Error;
+                    pageInfo.ErrorMessage = $"Lỗi dịch target: {translateResult.Error?.UserMessage}";
+                    return OperationResult<PageMatchingResult>.Failure(translateResult.Error!);
+                }
+                var translated = translateResult.Data!;
+                // Gán lại content đã dịch vào targetRows (tạo ContentRow mới do Content là init-only)
+                var translatedDict = translated.ToDictionary(t => t.ContentId, t => t.TranslatedContent);
+                for (int i = 0; i < targetRows.Count; i++)
+                {
+                    var row = targetRows[i];
+                    if (translatedDict.TryGetValue(row.ContentId, out var trans))
+                    {
+                        targetRows[i] = row with { Content = trans };
+                    }
+                }
+
+                progress?.Report("Đã dịch xong target, bắt đầu xử lý nội dung...");
 
                 // Preprocess content
                 progress?.Report("Xử lý nội dung...");

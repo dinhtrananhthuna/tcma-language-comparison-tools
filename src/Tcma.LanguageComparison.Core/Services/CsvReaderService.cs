@@ -324,6 +324,7 @@ namespace Tcma.LanguageComparison.Core.Services
                 // Write header
                 csv.WriteField("ContentId");
                 csv.WriteField("Content");
+                csv.WriteField("Translated");
                 csv.WriteField("Status");
                 csv.WriteField("SimilarityScore");
                 csv.WriteField("RowType");
@@ -336,23 +337,24 @@ namespace Tcma.LanguageComparison.Core.Services
                     {
                         case "Matched":
                             csv.WriteField(displayRow.TargetContentId);
-                            csv.WriteField(displayRow.TargetContent);
+                            csv.WriteField(displayRow.TargetContent); // Content: nội dung gốc (tiếng Trung)
+                            csv.WriteField(displayRow.TranslatedContent); // Translated: bản dịch tiếng Anh
                             csv.WriteField("Matched");
                             csv.WriteField(displayRow.SimilarityScore?.ToString("F3") ?? "");
                             csv.WriteField("Reference Aligned");
                             break;
-                        
                         case "Unmatched Target":
                             csv.WriteField(displayRow.TargetContentId);
-                            csv.WriteField(displayRow.TargetContent);
+                            csv.WriteField(displayRow.TargetContent); // Content: nội dung gốc (tiếng Trung)
+                            csv.WriteField(displayRow.TranslatedContent); // Translated: bản dịch tiếng Anh (nếu có)
                             csv.WriteField("Unmatched Target");
                             csv.WriteField(""); // No similarity score for unmatched
                             csv.WriteField("Extra Target");
                             break;
-                            
                         default: // Missing or other statuses
                             csv.WriteField("");
-                            csv.WriteField("");
+                            csv.WriteField(""); // No target content
+                            csv.WriteField(""); // No translated content
                             csv.WriteField(displayRow.Status);
                             csv.WriteField("");
                             csv.WriteField("Reference Aligned");
