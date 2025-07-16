@@ -5,7 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Tcma.LanguageComparison.Gui"
         mc:Ignorable="d"
-        Title="TCMA Language Comparison Tool" Height="700" Width="1200"
+        Title="TCMA Language Comparison Tool" 
+        Height="700" Width="1200"
+        MinHeight="500" MinWidth="800"
         WindowStartupLocation="CenterScreen">
     
     <Window.Resources>
@@ -37,92 +39,124 @@
             <TabControl x:Name="ProcessingModeTabControl" SelectionChanged="ProcessingModeTabControl_SelectionChanged">
                 <!-- Single File Tab -->
                 <TabItem Header="📄 Single File Mode" x:Name="SingleFileTab">
-                    <Grid Margin="10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="15"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                                  HorizontalScrollBarVisibility="Auto"
+                                  Margin="5">
+                        <Grid Margin="10" MinWidth="600">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="20"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                        <!-- File Selection -->
-                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Text="Reference File (English)" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="ReferenceFileTextBox" 
-                                         Grid.Column="0"
-                                         IsReadOnly="True" 
-                                         Background="#F8F8F8"
-                                         Margin="0,0,5,0"/>
-                                <Button x:Name="BrowseReferenceButton" 
-                                        Grid.Column="1"
-                                        Content="Browse" 
-                                        Width="70"
-                                        Click="BrowseReferenceButton_Click"/>
-                            </Grid>
-                        </StackPanel>
+                            <!-- File Selection Section -->
+                            <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly">
+                                <Grid MinWidth="600" MaxWidth="1000">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" MinWidth="250"/>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="*" MinWidth="250"/>
+                                    </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
-                            <TextBlock Text="Target File (Other Language)" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="TargetFileTextBox" 
-                                         Grid.Column="0"
-                                         IsReadOnly="True" 
-                                         Background="#F8F8F8"
-                                         Margin="0,0,5,0"/>
-                                <Button x:Name="BrowseTargetButton" 
-                                        Grid.Column="1"
-                                        Content="Browse" 
-                                        Width="70"
-                                        Click="BrowseTargetButton_Click"/>
-                            </Grid>
-                        </StackPanel>
+                                    <!-- Reference File Selection -->
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Reference File (English)" 
+                                                   FontWeight="Bold" 
+                                                   FontSize="12"
+                                                   Margin="0,0,0,8"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" MinWidth="180"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="ReferenceFileTextBox" 
+                                                     Grid.Column="0"
+                                                     IsReadOnly="True" 
+                                                     Background="#F8F8F8"
+                                                     MinHeight="28"
+                                                     VerticalContentAlignment="Center"
+                                                     TextWrapping="NoWrap"
+                                                     ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                                            <Button x:Name="BrowseReferenceButton" 
+                                                    Grid.Column="2"
+                                                    Content="Browse" 
+                                                    Width="80"
+                                                    Height="28"
+                                                    Click="BrowseReferenceButton_Click"/>
+                                        </Grid>
+                                    </StackPanel>
 
-                        <!-- Action Buttons -->
-                        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" 
-                                    Orientation="Horizontal" 
-                                    HorizontalAlignment="Center">
-                            <Button x:Name="SettingsButton"
-                                    Content="⚙️ Settings"
-                                    Width="100"
-                                    Height="35"
-                                    Background="#607D8B"
-                                    Foreground="White"
-                                    BorderBrush="#546E7A"
-                                    Margin="0,0,5,0"
-                                    Click="SettingsButton_Click"/>
-                            <Button x:Name="CompareButton"
-                                    Content="🔍 Compare"
-                                    Width="100"
-                                    Height="35"
-                                    Background="#4CAF50"
-                                    Foreground="White"
-                                    BorderBrush="#45A049"
-                                    Margin="5,0,5,0"
-                                    Click="CompareButton_Click"/>
-                            <Button x:Name="ExportButton"
-                                    Content="💾 Export"
-                                    Width="100"
-                                    Height="35"
-                                    Background="#FF9800"
-                                    Foreground="White"
-                                    BorderBrush="#F57C00"
-                                    Margin="5,0,0,0"
-                                    IsEnabled="False"
-                                    Click="ExportButton_Click"/>
-                        </StackPanel>
-                    </Grid>
+                                    <!-- Target File Selection -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Target File (Other Language)" 
+                                                   FontWeight="Bold" 
+                                                   FontSize="12"
+                                                   Margin="0,0,0,8"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" MinWidth="180"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="TargetFileTextBox" 
+                                                     Grid.Column="0"
+                                                     IsReadOnly="True" 
+                                                     Background="#F8F8F8"
+                                                     MinHeight="28"
+                                                     VerticalContentAlignment="Center"
+                                                     TextWrapping="NoWrap"
+                                                     ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                                            <Button x:Name="BrowseTargetButton" 
+                                                    Grid.Column="2"
+                                                    Content="Browse" 
+                                                    Width="80"
+                                                    Height="28"
+                                                    Click="BrowseTargetButton_Click"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Viewbox>
+
+                            <!-- Action Buttons -->
+                            <StackPanel Grid.Row="2" 
+                                        Orientation="Horizontal" 
+                                        HorizontalAlignment="Center"
+                                        Margin="0,10,0,0">
+                                <Button x:Name="SettingsButton"
+                                        Content="⚙️ Settings"
+                                        MinWidth="100"
+                                        Height="38"
+                                        Background="#607D8B"
+                                        Foreground="White"
+                                        BorderBrush="#546E7A"
+                                        FontSize="12"
+                                        Margin="0,0,8,0"
+                                        Click="SettingsButton_Click"/>
+                                <Button x:Name="CompareButton"
+                                        Content="🔍 Compare"
+                                        MinWidth="100"
+                                        Height="38"
+                                        Background="#4CAF50"
+                                        Foreground="White"
+                                        BorderBrush="#45A049"
+                                        FontSize="12"
+                                        Margin="8,0,8,0"
+                                        Click="CompareButton_Click"/>
+                                <Button x:Name="ExportButton"
+                                        Content="💾 Export"
+                                        MinWidth="100"
+                                        Height="38"
+                                        Background="#FF9800"
+                                        Foreground="White"
+                                        BorderBrush="#F57C00"
+                                        FontSize="12"
+                                        Margin="8,0,0,0"
+                                        IsEnabled="False"
+                                        Click="ExportButton_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
                 </TabItem>
 
                 <!-- Multi-Page Tab -->
@@ -435,77 +469,93 @@
         </Border>
         
         <!-- Results Section (Single File Mode Only) -->
-        <GroupBox Grid.Row="2" Header="Comparison Results" Margin="0,10,0,0" x:Name="SingleFileResultsPanel">
-            <Grid Margin="5">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                
-                <!-- Results DataGrid -->
-                <DataGrid Grid.Row="0" 
-                          x:Name="ResultsDataGrid" 
-                          AutoGenerateColumns="False" 
-                          CanUserAddRows="False" 
-                          CanUserDeleteRows="False" 
-                          IsReadOnly="True" 
-                          GridLinesVisibility="Horizontal"
-                          MaxHeight="400"
-                          VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Auto">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Ref Line #" Binding="{Binding RefLineNumber}" Width="80"/>
-                        <DataGridTextColumn Header="Reference Content" Binding="{Binding RefContent}" Width="300">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextWrapping" Value="Wrap"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="80"/>
-                        <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="250">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextWrapping" Value="Wrap"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="Translated Content" Binding="{Binding TranslatedContent}" Width="250">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextWrapping" Value="Wrap"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                    <Setter Property="Foreground" Value="#0066CC"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
-                        <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="100"/>
-                        <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="100"/>
-                    </DataGrid.Columns>
-                    <DataGrid.RowStyle>
-                        <Style TargetType="DataGridRow">
-                            <Setter Property="Background" Value="{Binding RowBackground}"/>
-                        </Style>
-                    </DataGrid.RowStyle>
-                </DataGrid>
-                
-                <!-- Statistics Panel -->
-                <StackPanel Grid.Row="1" 
-                            Orientation="Horizontal" 
-                            HorizontalAlignment="Right" 
-                            Margin="0,5,0,0">
-                    <TextBlock x:Name="StatisticsTextBlock" 
-                               Text="Ready to compare files..." 
-                               FontStyle="Italic"/>
-                </StackPanel>
-            </Grid>
-        </GroupBox>
+        <ScrollViewer Grid.Row="2" 
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto"
+                      Margin="0,10,0,0">
+            <GroupBox Header="Comparison Results" 
+                      x:Name="SingleFileResultsPanel"
+                      MinHeight="200">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" MinHeight="150"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Results DataGrid -->
+                    <DataGrid Grid.Row="0" 
+                              x:Name="ResultsDataGrid" 
+                              AutoGenerateColumns="False" 
+                              CanUserAddRows="False" 
+                              CanUserDeleteRows="False" 
+                              IsReadOnly="True" 
+                              GridLinesVisibility="Horizontal"
+                              MinHeight="150"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              CanUserResizeColumns="True"
+                              CanUserSortColumns="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Ref Line #" Binding="{Binding RefLineNumber}" Width="80" MinWidth="60"/>
+                            <DataGridTextColumn Header="Reference Content" Binding="{Binding RefContent}" Width="300" MinWidth="200">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Padding" Value="5"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="80" MinWidth="60"/>
+                            <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="250" MinWidth="150">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Padding" Value="5"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Translated Content" Binding="{Binding TranslatedContent}" Width="250" MinWidth="150">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Foreground" Value="#0066CC"/>
+                                        <Setter Property="Padding" Value="5"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" MinWidth="80"/>
+                            <DataGridTextColumn Header="Row Type" Binding="{Binding RowType}" Width="100" MinWidth="80"/>
+                            <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="100" MinWidth="80"/>
+                        </DataGrid.Columns>
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="{Binding RowBackground}"/>
+                                <Setter Property="MinHeight" Value="25"/>
+                            </Style>
+                        </DataGrid.RowStyle>
+                    </DataGrid>
+                    
+                    <!-- Statistics Panel -->
+                    <StackPanel Grid.Row="1" 
+                                Orientation="Horizontal" 
+                                HorizontalAlignment="Right" 
+                                Margin="0,8,0,0">
+                        <TextBlock x:Name="StatisticsTextBlock" 
+                                   Text="Ready to compare files..." 
+                                   FontStyle="Italic"
+                                   FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </GroupBox>
+        </ScrollViewer>
         
         <!-- Status Bar -->
-        <StatusBar Grid.Row="3">
+        <StatusBar Grid.Row="3" Height="25">
             <StatusBarItem>
                 <StackPanel Orientation="Horizontal">
                     <ProgressBar x:Name="ProgressBar" 
@@ -515,7 +565,8 @@
                                  Visibility="Collapsed"/>
                     <TextBlock x:Name="StatusTextBlock" 
                                Text="Ready" 
-                               Margin="10,0,0,0"/>
+                               Margin="10,0,0,0"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
             </StatusBarItem>
             
@@ -524,7 +575,8 @@
                 <TextBlock Text="By Vu Dinh - Simplify Dalat" 
                            FontSize="10" 
                            Foreground="#666666"
-                           FontStyle="Italic"/>
+                           FontStyle="Italic"
+                           VerticalAlignment="Center"/>
             </StatusBarItem>
         </StatusBar>
         

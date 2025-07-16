@@ -279,19 +279,21 @@ namespace Tcma.LanguageComparison.Core.Services
 
                 pageInfo.Progress = 80;
 
-                // Perform line-by-line matching
-                progress?.Report("Thực hiện matching...");
-                var matchingResult = await _contentMatcher.GenerateLineByLineReportAsync(
-                    referenceRows, targetRows, progress);
+                // Perform optimal matching (same as unit test)
+                progress?.Report("Thực hiện optimal matching...");
                 
-                if (!matchingResult.IsSuccess)
+                // Tạo aligned display data trực tiếp
+                var alignedDisplayData = await _contentMatcher.GenerateAlignedDisplayDataAsync(
+                    referenceRows, targetRows, originalTargetRows, translated, progress);
+                
+                // Convert back to LineByLineMatchResult để tương thích với existing interface
+                var lineByLineResults = alignedDisplayData.Select(row => new LineByLineMatchResult
                 {
-                    pageInfo.Status = PageStatus.Error;
-                    pageInfo.ErrorMessage = $"Lỗi trong quá trình matching: {matchingResult.Error?.UserMessage}";
-                    return OperationResult<PageMatchingResult>.Failure(matchingResult.Error!);
-                }
-
-                var lineByLineResults = matchingResult.Data!;
+                    TargetRow = new ContentRow { ContentId = row.TargetContentId, Content = row.TargetContent, OriginalIndex = (row.TargetLineNumber ?? 1) - 1 },
+                    CorrespondingReferenceRow = string.IsNullOrEmpty(row.RefContent) ? null : new ContentRow { Content = row.RefContent, OriginalIndex = (row.RefLineNumber ?? 1) - 1 },
+                    LineByLineScore = row.SimilarityScore ?? 0.0,
+                    IsGoodLineByLineMatch = row.Status == "Matched"
+                }).ToList();
 
                 pageInfo.Progress = 90;
 

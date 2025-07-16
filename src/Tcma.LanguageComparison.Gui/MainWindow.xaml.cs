@@ -232,21 +232,60 @@ public partial class MainWindow : Window
             ShowProgress("Translation completed. Proceeding to preprocessing and embedding...");
 
             ShowProgress("Generating embeddings for target content...");
+            
+            // Re-preprocess target content sau khi translate để update CleanContent
+            ShowProgress("Re-preprocessing translated target content...");
+            var textPreprocessor = new TextPreprocessingService();
+            textPreprocessor.ProcessContentRows(targetRows);
+            
+            // OPTIMIZATION: Reuse embeddings cho cùng content để tránh API inconsistency
+            ShowProgress("Optimizing embeddings - reusing for identical content...");
+            
+            // Tạo content embedding cache từ reference 
+            var contentEmbeddingCache = new Dictionary<string, float[]>();
+            foreach (var refRow in referenceRows.Where(r => r.EmbeddingVector != null))
+            {
+                var cleanContent = refRow.CleanContent?.Trim();
+                if (!string.IsNullOrEmpty(cleanContent) && !contentEmbeddingCache.ContainsKey(cleanContent))
+                {
+                    contentEmbeddingCache[cleanContent] = refRow.EmbeddingVector!;
+                }
+            }
+            
+            // Apply cached embeddings cho target rows có cùng content
+            int reusedCount = 0;
+            for (int i = 0; i < targetRows.Count; i++)
+            {
+                var targetRow = targetRows[i];
+                var cleanContent = targetRow.CleanContent?.Trim();
+                if (!string.IsNullOrEmpty(cleanContent) && contentEmbeddingCache.TryGetValue(cleanContent, out var cachedEmbedding))
+                {
+                    targetRows[i] = targetRow with { EmbeddingVector = cachedEmbedding };
+                    reusedCount++;
+                }
+            }
+            
+            ShowProgress($"Reused {reusedCount} embeddings. Generating remaining embeddings...");
+            
             var targetEmbeddingsResult = await geminiService.GenerateEmbeddingsAsync(targetRows, progress);
             if (!targetEmbeddingsResult.IsSuccess) throw new Exception(targetEmbeddingsResult.Error!.UserMessage);
 
-            ShowProgress("Finding matches...");
+            ShowProgress("Finding optimal matches...");
             var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
-            var matchingResult = await matchingService.GenerateLineByLineReportAsync(referenceRows, targetRows, progress);
-
-            if (!matchingResult.IsSuccess) throw new Exception(matchingResult.Error!.UserMessage);
-
-            _comparisonResults = matchingResult.Data!;
+            
+            // Sử dụng thuật toán optimal matching như unit test thay vì line-by-line
+            var alignedDisplayData = await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translated, progress);
+            
+            // Tạo _comparisonResults từ aligned data để tương thích với export logic
+            _comparisonResults = alignedDisplayData.Select(row => new LineByLineMatchResult
+            {
+                TargetRow = new ContentRow { ContentId = row.TargetContentId, Content = row.TargetContent, OriginalIndex = (row.TargetLineNumber ?? 1) - 1 },
+                CorrespondingReferenceRow = string.IsNullOrEmpty(row.RefContent) ? null : new ContentRow { Content = row.RefContent, OriginalIndex = (row.RefLineNumber ?? 1) - 1 },
+                LineByLineScore = row.SimilarityScore ?? 0.0,
+                IsGoodLineByLineMatch = row.Status == "Matched"
+            }).ToList();
 
             ShowProgress("Updating results...");
-            
-            // Convert comparison results to aligned display data
-            var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translated);
             
             await Dispatcher.InvokeAsync(() =>
             {
