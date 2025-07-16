@@ -35,11 +35,11 @@ public partial class MainWindow : Window
     private readonly ErrorHandlingService _errorHandler;
     
     // UI Collections
-    public ObservableCollection<ComparisonResultViewModel> Results { get; } = new();
+    public ObservableCollection<AlignedDisplayRow> Results { get; } = new();
     public ObservableCollection<PageInfo> Pages { get; } = new();
 
     // Thêm biến cache cho multi-page mode
-    private readonly Dictionary<string, List<ComparisonResultViewModel>> _multiPageResultsCache = new();
+    private readonly Dictionary<string, List<AlignedDisplayRow>> _multiPageResultsCache = new();
     private PageInfo? _currentMultiPagePage = null;
 
     public MainWindow()
@@ -220,11 +220,15 @@ public partial class MainWindow : Window
             _comparisonResults = matchingResult.Data!;
 
             ShowProgress("Updating results...");
+            
+            // Convert comparison results to aligned display data
+            var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(referenceRows, targetRows);
+            
             await Dispatcher.InvokeAsync(() =>
             {
-                foreach (var result in _comparisonResults)
+                foreach (var displayRow in alignedDisplayData)
                 {
-                    Results.Add(new ComparisonResultViewModel(result));
+                    Results.Add(displayRow);
                 }
             });
 
@@ -257,7 +261,7 @@ public partial class MainWindow : Window
 
     private async void ExportButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_comparisonResults == null || !_comparisonResults.Any())
+        if (Results == null || !Results.Any())
         {
             ShowError("No comparison results to export. Please run comparison first.");
             return;
@@ -278,30 +282,11 @@ public partial class MainWindow : Window
                 SetUIEnabled(false);
                 ShowProgress("Exporting aligned target file...");
 
-                // Sử dụng lại data từ _comparisonResults đã có embedding sẵn
-                // Lấy unique reference rows (đã có embedding)
-                var referenceRows = _comparisonResults
-                    .Select(r => r.CorrespondingReferenceRow)
-                    .Where(r => r != null)
-                    .GroupBy(r => r.OriginalIndex)
-                    .Select(g => g.First())
-                    .OrderBy(r => r.OriginalIndex)
-                    .ToList();
-
-                // Lấy unique target rows (đã có embedding)
-                var targetRows = _comparisonResults
-                    .Select(r => r.TargetRow)
-                    .Where(r => r != null)
-                    .GroupBy(r => r.OriginalIndex)
-                    .Select(g => g.First())
-                    .OrderBy(r => r.OriginalIndex)
-                    .ToList();
-
-                var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
-                var alignedResult = await matchingService.GenerateAlignedTargetFileAsync(referenceRows!, targetRows!);
+                // Sử dụng aligned display data từ DataGrid (đã có sẵn)
+                var alignedDisplayData = Results.ToList();
 
                 var csvService = new CsvReaderService();
-                var exportResult = await csvService.ExportAlignedTargetRowsAsync(saveFileDialog.FileName, alignedResult);
+                var exportResult = await csvService.ExportAlignedDisplayRowsAsync(saveFileDialog.FileName, alignedDisplayData);
 
                 if (exportResult.IsSuccess)
                 {
@@ -570,9 +555,23 @@ public partial class MainWindow : Window
             if (result.IsSuccess)
             {
                 var pageResult = result.Data!;
-                var viewModels = pageResult.Results.Select(r => new ComparisonResultViewModel(r)).ToList();
-                _multiPageResultsCache[pageInfo.PageName] = viewModels;
-                MultiPageResultsDataGrid.ItemsSource = viewModels;
+                
+                // Extract reference and target rows from the page results
+                var referenceRows = pageResult.Results
+                    .Where(r => r.CorrespondingReferenceRow != null)
+                    .Select(r => r.CorrespondingReferenceRow!)
+                    .Distinct()
+                    .ToList();
+                    
+                var targetRows = pageResult.Results
+                    .Select(r => r.TargetRow)
+                    .ToList();
+                
+                // Convert to aligned display data
+                var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(referenceRows, targetRows);
+                
+                _multiPageResultsCache[pageInfo.PageName] = alignedDisplayData;
+                MultiPageResultsDataGrid.ItemsSource = alignedDisplayData;
                 _currentMultiPagePage = pageInfo;
                 ShowStatus($"Successfully processed page: {pageInfo.PageName}");
             }
@@ -642,6 +641,15 @@ public partial class MainWindow : Window
     }
 
     // Xóa các hàm AddOrUpdateResultsTab, CreateResultsDataGrid, SwitchToResultsTab vì không còn dùng nữa
+
+    /// <summary>
+    /// Convert raw data to aligned display data using ContentMatchingService
+    /// </summary>
+    private async Task<List<AlignedDisplayRow>> ConvertToAlignedDisplayDataAsync(List<ContentRow> referenceRows, List<ContentRow> targetRows)
+    {
+        var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
+        return await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows);
+    }
 
     #endregion
 }

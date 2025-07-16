@@ -499,6 +499,35 @@ namespace Tcma.LanguageComparison.Core.Services
                 AverageSimilarityScore = results.Any() ? results.Average(r => r.SimilarityScore) : 0
             };
         }
+
+        /// <summary>
+        /// Tạo dữ liệu aligned để hiển thị trong DataGrid (sử dụng chung thuật toán với export)
+        /// </summary>
+        /// <param name="referenceRows">Danh sách reference rows đã có embedding</param>
+        /// <param name="targetRows">Danh sách target rows đã có embedding</param>
+        /// <param name="progressCallback">Optional progress callback</param>
+        /// <returns>Danh sách AlignedDisplayRow theo thứ tự reference</returns>
+        public async Task<List<AlignedDisplayRow>> GenerateAlignedDisplayDataAsync(
+            List<ContentRow> referenceRows, 
+            List<ContentRow> targetRows, 
+            IProgress<string>? progressCallback = null)
+        {
+            // Sử dụng lại logic từ GenerateAlignedTargetFileAsync
+            var alignedResult = await GenerateAlignedTargetFileAsync(referenceRows, targetRows, progressCallback);
+            
+            var displayRows = new List<AlignedDisplayRow>();
+            
+            for (int i = 0; i < alignedResult.AlignedRows.Count; i++)
+            {
+                var alignedRow = alignedResult.AlignedRows[i];
+                var referenceRow = referenceRows[alignedRow.ReferenceIndex];
+                
+                var displayRow = AlignedDisplayRow.FromAlignedTargetRow(alignedRow, referenceRow);
+                displayRows.Add(displayRow);
+            }
+            
+            return displayRows;
+        }
     }
 
 } 

@@ -286,6 +286,86 @@ namespace Tcma.LanguageComparison.Core.Services
         }
 
         /// <summary>
+        /// Export aligned display data to CSV file
+        /// </summary>
+        public async Task<OperationResult<bool>> ExportAlignedDisplayRowsAsync(string filePath, List<AlignedDisplayRow> alignedDisplayRows)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(filePath))
+                {
+                    return OperationResult<bool>.Failure(
+                        CommonErrors.InvalidFilePath(filePath ?? "null"));
+                }
+
+                if (alignedDisplayRows == null || alignedDisplayRows.Count == 0)
+                {
+                    return OperationResult<bool>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.Medium,
+                        UserMessage = "Không có dữ liệu để ghi vào file.",
+                        TechnicalDetails = "Aligned display rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo có dữ liệu trước khi xuất file."
+                    });
+                }
+
+                // Ensure directory exists
+                var directory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                using var writer = new StreamWriter(filePath);
+                using var csv = new CsvWriter(writer, GetCsvConfiguration());
+
+                // Write header
+                csv.WriteField("ContentId");
+                csv.WriteField("Content");
+                csv.WriteField("Status");
+                csv.WriteField("SimilarityScore");
+                csv.NextRecord();
+
+                // Write rows - chỉ target content và status
+                foreach (var displayRow in alignedDisplayRows)
+                {
+                    if (displayRow.Status == "Matched" && !string.IsNullOrEmpty(displayRow.TargetContent))
+                    {
+                        csv.WriteField(displayRow.TargetContentId); // Sử dụng ContentId thật từ target
+                        csv.WriteField(displayRow.TargetContent);
+                        csv.WriteField("Matched");
+                        csv.WriteField(displayRow.SimilarityScore?.ToString("F3") ?? "");
+                    }
+                    else
+                    {
+                        csv.WriteField("");
+                        csv.WriteField("");
+                        csv.WriteField("Missing");
+                        csv.WriteField("");
+                    }
+                    csv.NextRecord();
+                }
+                
+                writer.Flush();
+                return OperationResult<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                return OperationResult<bool>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Lỗi ghi file CSV aligned target.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng đóng file nếu đang mở và thử lại.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
+            }
+        }
+
+        /// <summary>
         /// Validates the structure of loaded CSV data
         /// </summary>
         private OperationResult<List<ContentRow>> ValidateCsvStructure(List<ContentRow> records)

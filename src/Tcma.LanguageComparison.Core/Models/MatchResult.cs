@@ -106,4 +106,86 @@ namespace Tcma.LanguageComparison.Core.Models
         public bool HasMatch => TargetRow != null;
         public string Status => HasMatch ? "Matched" : "Missing";
     }
+
+    /// <summary>
+    /// Model cho việc hiển thị aligned data trong DataGrid (cả single và multiple page mode)
+    /// </summary>
+    public record AlignedDisplayRow
+    {
+        /// <summary>
+        /// Số dòng reference (1-based)
+        /// </summary>
+        public int RefLineNumber { get; init; }
+        
+        /// <summary>
+        /// Nội dung reference
+        /// </summary>
+        public string RefContent { get; init; } = string.Empty;
+        
+        /// <summary>
+        /// Số dòng target (1-based), null nếu không có match
+        /// </summary>
+        public int? TargetLineNumber { get; init; }
+        
+        /// <summary>
+        /// Nội dung target, empty nếu không có match
+        /// </summary>
+        public string TargetContent { get; init; } = string.Empty;
+        
+        /// <summary>
+        /// ContentId của target, empty nếu không có match
+        /// </summary>
+        public string TargetContentId { get; init; } = string.Empty;
+        
+        /// <summary>
+        /// Trạng thái: "Matched" hoặc "Missing"
+        /// </summary>
+        public string Status { get; init; } = "Missing";
+        
+        /// <summary>
+        /// Điểm similarity (0-1), null nếu không có match
+        /// </summary>
+        public double? SimilarityScore { get; init; }
+        
+        /// <summary>
+        /// Quality cho styling (High, Medium, Low, Poor)
+        /// </summary>
+        public MatchQuality Quality { get; init; } = MatchQuality.Poor;
+        
+        /// <summary>
+        /// Background color cho row styling
+        /// </summary>
+        public string RowBackground => Quality switch
+        {
+            MatchQuality.High => "#E8F5E8",      // Light green
+            MatchQuality.Medium => "#FFF3E0",    // Light orange
+            MatchQuality.Low => "#FFEBEE",       // Light red
+            MatchQuality.Poor => "#FAFAFA",      // Light gray
+            _ => "White"
+        };
+        
+        /// <summary>
+        /// Tạo từ AlignedTargetRow
+        /// </summary>
+        public static AlignedDisplayRow FromAlignedTargetRow(AlignedTargetRow alignedRow, ContentRow referenceRow)
+        {
+            return new AlignedDisplayRow
+            {
+                RefLineNumber = alignedRow.ReferenceIndex + 1,  // Convert to 1-based
+                RefContent = referenceRow.Content,
+                TargetLineNumber = alignedRow.TargetRow?.OriginalIndex + 1,  // Convert to 1-based, null if no match
+                TargetContent = alignedRow.TargetRow?.Content ?? string.Empty,
+                TargetContentId = alignedRow.TargetRow?.ContentId ?? string.Empty,
+                Status = alignedRow.Status,
+                SimilarityScore = alignedRow.SimilarityScore,
+                Quality = alignedRow.SimilarityScore switch
+                {
+                    >= 0.8 => MatchQuality.High,
+                    >= 0.6 => MatchQuality.Medium,
+                    >= 0.4 => MatchQuality.Low,
+                    _ => MatchQuality.Poor
+                }
+            };
+        }
+    }
 } 

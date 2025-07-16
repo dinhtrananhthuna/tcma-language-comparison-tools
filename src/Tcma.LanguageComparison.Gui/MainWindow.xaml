@@ -391,6 +391,15 @@
                                       ScrollViewer.VerticalScrollBarVisibility="Auto"
                                       ScrollViewer.HorizontalScrollBarVisibility="Auto">
                                 <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Ref Line #" Binding="{Binding RefLineNumber}" Width="100"/>
+                                    <DataGridTextColumn Header="Reference Content" Binding="{Binding RefContent}" Width="400">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
                                     <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="100"/>
                                     <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="400">
                                         <DataGridTextColumn.ElementStyle>
@@ -400,24 +409,8 @@
                                             </Style>
                                         </DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="Ref. Line #" Binding="{Binding ReferenceLineNumber}" Width="100"/>
-                                    <DataGridTextColumn Header="Reference Content" Binding="{Binding ReferenceContent}" Width="400">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextWrapping" Value="Wrap"/>
-                                                <Setter Property="VerticalAlignment" Value="Center"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
                                     <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="150"/>
-                                    <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="100"/>
-                                    <DataGridTextColumn Header="Suggestion" Binding="{Binding Suggestion}" Width="400">
-                                        <DataGridTextColumn.ElementStyle>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="TextWrapping" Value="Wrap"/>
-                                            </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
                                 </DataGrid.Columns>
                                 <DataGrid.RowStyle>
                                     <Style TargetType="DataGridRow">
@@ -451,6 +444,15 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
+                        <DataGridTextColumn Header="Ref Line #" Binding="{Binding RefLineNumber}" Width="80"/>
+                        <DataGridTextColumn Header="Reference Content" Binding="{Binding RefContent}" Width="300">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
                         <DataGridTextColumn Header="Target Line #" Binding="{Binding TargetLineNumber}" Width="80"/>
                         <DataGridTextColumn Header="Target Content" Binding="{Binding TargetContent}" Width="300">
                             <DataGridTextColumn.ElementStyle>
@@ -460,24 +462,8 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Ref. Line #" Binding="{Binding ReferenceLineNumber}" Width="80"/>
-                        <DataGridTextColumn Header="Reference Content" Binding="{Binding ReferenceContent}" Width="300">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextWrapping" Value="Wrap"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
                         <DataGridTextColumn Header="Similarity Score" Binding="{Binding SimilarityScore, StringFormat=F3}" Width="120"/>
-                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="80"/>
-                        <DataGridTextColumn Header="Suggestion" Binding="{Binding Suggestion}" Width="*">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextWrapping" Value="Wrap"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
                     </DataGrid.Columns>
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
