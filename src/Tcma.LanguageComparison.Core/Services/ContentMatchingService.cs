@@ -289,6 +289,88 @@ namespace Tcma.LanguageComparison.Core.Services
         }
 
         /// <summary>
+        /// Tạo danh sách target đã align với reference (có dòng trống cho dòng thiếu)
+        /// </summary>
+        public async Task<AlignedTargetResult> GenerateAlignedTargetFileAsync(
+            IEnumerable<ContentRow> referenceRows,
+            IEnumerable<ContentRow> targetRows,
+            IProgress<string>? progressCallback = null)
+        {
+            var refList = referenceRows?.ToList() ?? new List<ContentRow>();
+            var targetList = targetRows?.ToList() ?? new List<ContentRow>();
+            var alignedRows = new List<AlignedTargetRow>();
+            var usedTargetIndexes = new HashSet<int>();
+
+            // Lấy các dòng có embedding
+            var refWithEmbeddings = refList.Where(r => r.EmbeddingVector != null).ToList();
+            var targetWithEmbeddings = targetList.Where(t => t.EmbeddingVector != null).ToList();
+
+            for (int i = 0; i < refList.Count; i++)
+            {
+                var refRow = refList[i];
+                if (refRow.EmbeddingVector == null || targetWithEmbeddings.Count == 0)
+                {
+                    // Không có embedding, chèn dòng trống
+                    alignedRows.Add(new AlignedTargetRow
+                    {
+                        ReferenceIndex = i,
+                        TargetRow = null,
+                        SimilarityScore = null
+                    });
+                    continue;
+                }
+
+                // Tìm best match trong target chưa dùng
+                double bestSim = -1.0;
+                ContentRow? bestTarget = null;
+                int? bestTargetIdx = null;
+                for (int j = 0; j < targetWithEmbeddings.Count; j++)
+                {
+                    var tRow = targetWithEmbeddings[j];
+                    if (usedTargetIndexes.Contains(tRow.OriginalIndex)) continue;
+                    var sim = GeminiEmbeddingService.CalculateCosineSimilarity(refRow.EmbeddingVector, tRow.EmbeddingVector);
+                    if (sim > bestSim)
+                    {
+                        bestSim = sim;
+                        bestTarget = tRow;
+                        bestTargetIdx = tRow.OriginalIndex;
+                    }
+                }
+                // Nếu similarity đủ tốt thì match, không thì chèn dòng trống
+                if (bestTarget != null && bestSim >= _similarityThreshold)
+                {
+                    alignedRows.Add(new AlignedTargetRow
+                    {
+                        ReferenceIndex = i,
+                        TargetRow = bestTarget,
+                        SimilarityScore = bestSim
+                    });
+                    usedTargetIndexes.Add(bestTargetIdx!.Value);
+                }
+                else
+                {
+                    alignedRows.Add(new AlignedTargetRow
+                    {
+                        ReferenceIndex = i,
+                        TargetRow = null,
+                        SimilarityScore = null
+                    });
+                }
+            }
+            // Các dòng target không được dùng
+            var unusedTargetRows = targetList.Where(t => !usedTargetIndexes.Contains(t.OriginalIndex)).ToList();
+            return new AlignedTargetResult
+            {
+                AlignedRows = alignedRows,
+                UnusedTargetRows = unusedTargetRows,
+                TotalReferenceRows = refList.Count,
+                MatchedRows = alignedRows.Count(r => r.HasMatch),
+                MissingRows = alignedRows.Count(r => !r.HasMatch),
+                UnusedRows = unusedTargetRows.Count
+            };
+        }
+
+        /// <summary>
         /// Finds the best match for a single reference row
         /// </summary>
         private async Task<MatchResult> FindBestMatchAsync(

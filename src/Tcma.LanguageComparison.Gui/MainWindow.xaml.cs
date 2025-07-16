@@ -265,10 +265,10 @@ public partial class MainWindow : Window
 
         var saveFileDialog = new SaveFileDialog
         {
-            Title = "Export Comparison Report",
+            Title = "Export Aligned Target File",
             Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
             FilterIndex = 1,
-            FileName = $"comparison_report_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            FileName = $"aligned_target_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
         };
 
         if (saveFileDialog.ShowDialog() == true)
@@ -276,29 +276,30 @@ public partial class MainWindow : Window
             try
             {
                 SetUIEnabled(false);
-                ShowProgress("Exporting report...");
+                ShowProgress("Exporting aligned target file...");
 
-                var csvContent = "Target Line #,Target Content,Reference Line #,Reference Content,Similarity Score,Quality,Suggestion\n";
-                
-                foreach (var result in _comparisonResults)
+                // Lấy lại reference và target rows từ _comparisonResults
+                var referenceRows = _comparisonResults.Select(r => r.CorrespondingReferenceRow).Where(r => r != null).ToList();
+                var targetRows = _comparisonResults.Select(r => r.TargetRow).Where(r => r != null).ToList();
+
+                var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
+                var alignedResult = await matchingService.GenerateAlignedTargetFileAsync(referenceRows!, targetRows!);
+
+                var csvService = new CsvReaderService();
+                var exportResult = await csvService.ExportAlignedTargetRowsAsync(saveFileDialog.FileName, alignedResult);
+
+                if (exportResult.IsSuccess)
                 {
-                    var targetLineNumber = result.TargetRow.OriginalIndex + 1;
-                    var targetContent = EscapeCsvField(result.TargetRow.Content);
-                    var referenceLineNumber = result.CorrespondingReferenceRow?.OriginalIndex + 1 ?? 0;
-                    var referenceContent = result.CorrespondingReferenceRow != null ? EscapeCsvField(result.CorrespondingReferenceRow.Content) : "N/A";
-                    var similarity = result.LineByLineScore.ToString("F3");
-                    var quality = result.Quality.ToString();
-                    var suggestion = result.SuggestedMatch != null ? $"Suggested Ref Line: {result.SuggestedMatch.ReferenceRow.OriginalIndex + 1} (Score: {result.SuggestedMatch.SimilarityScore:F3})" : "None";
-
-                    csvContent += $"{targetLineNumber},{targetContent},{referenceLineNumber},{referenceContent},{similarity},{quality},{EscapeCsvField(suggestion)}\n";
+                    ShowStatus($"Aligned target file exported successfully to: {saveFileDialog.FileName}");
                 }
-
-                await File.WriteAllTextAsync(saveFileDialog.FileName, csvContent);
-                ShowStatus($"Report exported successfully to: {saveFileDialog.FileName}");
+                else
+                {
+                    ShowError(exportResult.Error?.UserMessage ?? "Export failed");
+                }
             }
             catch (Exception ex)
             {
-                var error = _errorHandler.ProcessException(ex, "Exporting report");
+                var error = _errorHandler.ProcessException(ex, "Exporting aligned target file");
                 await _errorHandler.HandleErrorAsync(error);
             }
             finally

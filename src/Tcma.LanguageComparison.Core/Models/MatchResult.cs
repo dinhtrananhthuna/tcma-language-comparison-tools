@@ -81,4 +81,29 @@ namespace Tcma.LanguageComparison.Core.Models
         public double MatchPercentage { get; init; }
         public double AverageSimilarityScore { get; init; }
     }
+
+    /// <summary>
+    /// Kết quả align target với reference (cho export file target mới)
+    /// </summary>
+    public record AlignedTargetResult
+    {
+        public List<AlignedTargetRow> AlignedRows { get; init; } = new();
+        public List<ContentRow> UnusedTargetRows { get; init; } = new();
+        public int TotalReferenceRows { get; init; }
+        public int MatchedRows { get; init; }
+        public int MissingRows { get; init; }
+        public int UnusedRows { get; init; }
+    }
+
+    /// <summary>
+    /// Một dòng align giữa reference và target (target có thể null nếu thiếu)
+    /// </summary>
+    public record AlignedTargetRow
+    {
+        public int ReferenceIndex { get; init; }
+        public ContentRow? TargetRow { get; init; }  // null nếu không có match
+        public double? SimilarityScore { get; init; }
+        public bool HasMatch => TargetRow != null;
+        public string Status => HasMatch ? "Matched" : "Missing";
+    }
 } 

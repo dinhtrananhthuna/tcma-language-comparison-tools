@@ -206,6 +206,86 @@ namespace Tcma.LanguageComparison.Core.Services
         }
 
         /// <summary>
+        /// Export aligned target rows ra file CSV (dòng thiếu sẽ để trống, có thêm cột Status và SimilarityScore)
+        /// </summary>
+        public async Task<OperationResult<bool>> ExportAlignedTargetRowsAsync(string filePath, AlignedTargetResult alignedResult)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(filePath))
+                {
+                    return OperationResult<bool>.Failure(
+                        CommonErrors.InvalidFilePath(filePath ?? "null"));
+                }
+
+                var rows = alignedResult.AlignedRows;
+                if (rows == null || rows.Count == 0)
+                {
+                    return OperationResult<bool>.Failure(new ErrorInfo
+                    {
+                        Category = ErrorCategory.DataValidation,
+                        Severity = ErrorSeverity.Medium,
+                        UserMessage = "Không có dữ liệu để ghi vào file.",
+                        TechnicalDetails = "Aligned rows collection is null or empty",
+                        SuggestedAction = "Vui lòng đảm bảo có dữ liệu trước khi xuất file."
+                    });
+                }
+
+                // Ensure directory exists
+                var directory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                using var writer = new StreamWriter(filePath);
+                using var csv = new CsvWriter(writer, GetCsvConfiguration());
+
+                // Write header
+                csv.WriteField("ContentId");
+                csv.WriteField("Content");
+                csv.WriteField("Status");
+                csv.WriteField("SimilarityScore");
+                csv.NextRecord();
+
+                // Write rows
+                foreach (var row in rows)
+                {
+                    if (row.HasMatch && row.TargetRow != null)
+                    {
+                        csv.WriteField(row.TargetRow.ContentId);
+                        csv.WriteField(row.TargetRow.Content);
+                        csv.WriteField("Matched");
+                        csv.WriteField(row.SimilarityScore?.ToString("F3") ?? "");
+                    }
+                    else
+                    {
+                        csv.WriteField("");
+                        csv.WriteField("");
+                        csv.WriteField("Missing");
+                        csv.WriteField("");
+                    }
+                    csv.NextRecord();
+                }
+                writer.Flush();
+                return OperationResult<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                return OperationResult<bool>.Failure(new ErrorInfo
+                {
+                    Category = ErrorCategory.FileAccess,
+                    Severity = ErrorSeverity.High,
+                    UserMessage = "Lỗi ghi file CSV aligned target.",
+                    TechnicalDetails = ex.Message,
+                    SuggestedAction = "Vui lòng đóng file nếu đang mở và thử lại.",
+                    OriginalException = ex,
+                    ContextInfo = filePath
+                });
+            }
+        }
+
+        /// <summary>
         /// Validates the structure of loaded CSV data
         /// </summary>
         private OperationResult<List<ContentRow>> ValidateCsvStructure(List<ContentRow> records)
