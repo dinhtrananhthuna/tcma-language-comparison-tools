@@ -126,7 +126,7 @@
                 </TabItem>
 
                 <!-- Multi-Page Tab -->
-                <TabItem Header="📚 Multi-Page Mode" x:Name="MultiPageTab">
+                <TabItem Header="📚 Multi-Page Mode" x:Name="MultiPageTab" Visibility="Collapsed">
                     <!-- Multi-page content takes full available space -->
                     <Grid x:Name="MultiPageGrid" Margin="10" 
                           Height="450"

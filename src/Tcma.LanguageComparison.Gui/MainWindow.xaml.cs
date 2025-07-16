@@ -395,7 +395,7 @@ public partial class MainWindow : Window
             // Show comparison results for single file mode
             SingleFileResultsPanel.Visibility = Visibility.Visible;
         }
-        else if (ProcessingModeTabControl.SelectedItem == MultiPageTab)
+        else if (ProcessingModeTabControl.SelectedItem == MultiPageTab && MultiPageTab.Visibility == Visibility.Visible)
         {
             // Hide comparison results for multi-page mode (has its own results panel)
             SingleFileResultsPanel.Visibility = Visibility.Collapsed;
