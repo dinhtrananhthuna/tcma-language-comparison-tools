@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Tcma.LanguageComparison.Core.Models;
@@ -45,7 +46,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     });
                 }
 
-                using var reader = new StreamReader(filePath);
+                using var reader = new StreamReader(filePath, Encoding.UTF8);
                 using var csv = new CsvReader(reader, GetCsvConfiguration());
 
                 var records = new List<ContentRow>();
@@ -152,7 +153,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     Directory.CreateDirectory(directory);
                 }
 
-                using var writer = new StreamWriter(filePath);
+                using var writer = new StreamWriter(filePath, false, Encoding.UTF8);
                 using var csv = new CsvWriter(writer, GetCsvConfiguration());
 
                 var records = rows.Select(row => new CsvRowDto
@@ -238,7 +239,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     Directory.CreateDirectory(directory);
                 }
 
-                using var writer = new StreamWriter(filePath);
+                using var writer = new StreamWriter(filePath, false, Encoding.UTF8);
                 using var csv = new CsvWriter(writer, GetCsvConfiguration());
 
                 // Write header
@@ -317,7 +318,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     Directory.CreateDirectory(directory);
                 }
 
-                using var writer = new StreamWriter(filePath);
+                using var writer = new StreamWriter(filePath, false, Encoding.UTF8);
                 using var csv = new CsvWriter(writer, GetCsvConfiguration());
 
                 // Write header
@@ -415,7 +416,7 @@ namespace Tcma.LanguageComparison.Core.Services
         }
 
         /// <summary>
-        /// Gets CSV configuration for consistent parsing/writing
+        /// Gets CSV configuration for consistent parsing/writing with UTF-8 support
         /// </summary>
         private static CsvConfiguration GetCsvConfiguration()
         {
@@ -424,7 +425,8 @@ namespace Tcma.LanguageComparison.Core.Services
                 HasHeaderRecord = true,
                 TrimOptions = TrimOptions.Trim,
                 MissingFieldFound = null, // Ignore missing fields
-                BadDataFound = null // Ignore bad data
+                BadDataFound = null, // Ignore bad data
+                Encoding = Encoding.UTF8 // Ensure UTF-8 encoding for special characters
             };
         }
     }
