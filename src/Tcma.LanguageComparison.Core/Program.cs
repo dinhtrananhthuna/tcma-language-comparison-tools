@@ -14,6 +14,13 @@ namespace Tcma.LanguageComparison.Core
     {
         public static async Task Main(string[] args)
         {
+            // Check for test command
+            if (args.Length > 0 && args[0] == "test")
+            {
+                await RunAlignmentTest();
+                return;
+            }
+
             Console.WriteLine("=== TCMA Language Comparison Tool ===");
             Console.WriteLine("Công cụ so sánh nội dung đa ngôn ngữ sử dụng AI embeddings\n");
 
@@ -300,6 +307,28 @@ namespace Tcma.LanguageComparison.Core
             }
             
             return string.Join(" ||| ", parts);
+        }
+
+        private static async Task RunAlignmentTest()
+        {
+            Console.WriteLine("🧪 TCMA Alignment Test Mode");
+            Console.WriteLine(new string('=', 50));
+            
+            // Get API key
+            var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                Console.WriteLine("❌ GEMINI_API_KEY not set. Please set it first:");
+                Console.WriteLine("$env:GEMINI_API_KEY=\"your_api_key_here\"");
+                return;
+            }
+            
+            Console.WriteLine("🔑 API Key found, starting test...\n");
+            
+            // Run alignment test
+            await AlignmentTest.RunAlignmentTestAsync(apiKey);
+            
+            Console.WriteLine("\n🏁 Test completed!");
         }
     }
 }

@@ -353,8 +353,8 @@ namespace Tcma.LanguageComparison.Core.Services
             {
                 var refRow = refList[i];
                 
-                // Tìm index của ref row này trong danh sách có embedding
-                var refEmbeddingIdx = refWithEmbeddings.FindIndex(r => ReferenceEquals(r, refRow));
+                // Tìm index của ref row này trong danh sách có embedding bằng OriginalIndex
+                var refEmbeddingIdx = refWithEmbeddings.FindIndex(r => r.OriginalIndex == refRow.OriginalIndex);
                 
                 if (refEmbeddingIdx >= 0 && refToTargetMap.ContainsKey(refEmbeddingIdx))
                 {
