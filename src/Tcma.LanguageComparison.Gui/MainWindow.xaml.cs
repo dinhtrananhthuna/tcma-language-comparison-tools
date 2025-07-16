@@ -259,7 +259,7 @@ public partial class MainWindow : Window
     {
         if (_comparisonResults == null || !_comparisonResults.Any())
         {
-            ShowError("No comparison results to export.");
+            ShowError("No comparison results to export. Please run comparison first.");
             return;
         }
 
@@ -278,9 +278,24 @@ public partial class MainWindow : Window
                 SetUIEnabled(false);
                 ShowProgress("Exporting aligned target file...");
 
-                // Lấy lại reference và target rows từ _comparisonResults
-                var referenceRows = _comparisonResults.Select(r => r.CorrespondingReferenceRow).Where(r => r != null).ToList();
-                var targetRows = _comparisonResults.Select(r => r.TargetRow).Where(r => r != null).ToList();
+                // Sử dụng lại data từ _comparisonResults đã có embedding sẵn
+                // Lấy unique reference rows (đã có embedding)
+                var referenceRows = _comparisonResults
+                    .Select(r => r.CorrespondingReferenceRow)
+                    .Where(r => r != null)
+                    .GroupBy(r => r.OriginalIndex)
+                    .Select(g => g.First())
+                    .OrderBy(r => r.OriginalIndex)
+                    .ToList();
+
+                // Lấy unique target rows (đã có embedding)
+                var targetRows = _comparisonResults
+                    .Select(r => r.TargetRow)
+                    .Where(r => r != null)
+                    .GroupBy(r => r.OriginalIndex)
+                    .Select(g => g.First())
+                    .OrderBy(r => r.OriginalIndex)
+                    .ToList();
 
                 var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
                 var alignedResult = await matchingService.GenerateAlignedTargetFileAsync(referenceRows!, targetRows!);
