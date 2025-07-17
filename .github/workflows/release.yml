@@ -1,0 +1,80 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      release_name:
+        description: 'Release name (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Build and package
+      run: |
+        cd src/Tcma.LanguageComparison.Gui
+        powershell -ExecutionPolicy Bypass -File build-zip.ps1 -Version ${{ github.event.inputs.version }}
+        
+    - name: Get release info
+      id: release_info
+      run: |
+        $version = "${{ github.event.inputs.version }}"
+        $releaseName = "${{ github.event.inputs.release_name }}"
+        if ([string]::IsNullOrEmpty($releaseName)) {
+          $releaseName = "TCMA Language Comparison Tool v$version"
+        }
+        echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+        echo "tag_name=v$version" >> $env:GITHUB_OUTPUT
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.release_info.outputs.tag_name }}
+        name: ${{ steps.release_info.outputs.release_name }}
+        body: |
+          ## TCMA Language Comparison Tool v${{ github.event.inputs.version }}
+          
+          🚀 **Tính năng chính:**
+          - So sánh và căn chỉnh nội dung đa ngôn ngữ bằng AI embeddings
+          - Sử dụng Google Gemini API để hiểu ngữ nghĩa
+          - Giao diện WPF thân thiện với người dùng
+          - Xuất kết quả ra file CSV
+          
+          📦 **Cách sử dụng:**
+          1. Tải file `Tcma.LanguageComparison.Gui-${{ github.event.inputs.version }}-portable.zip`
+          2. Giải nén và chạy `Tcma.LanguageComparison.Gui.exe`
+          3. Cấu hình Google Gemini API key trong Settings
+          4. Chọn file CSV nguồn và đích để bắt đầu so sánh
+          
+          ⚙️ **Yêu cầu:**
+          - Windows 10/11 
+          - .NET 8 Runtime (có thể tự động cài đặt)
+          - Google Gemini API key
+          
+          ---
+          
+          **Changelog:**
+          - Cải thiện hiệu suất xử lý
+          - Tối ưu hóa thuật toán matching
+          - Cập nhật giao diện người dùng
+        files: |
+          src/Tcma.LanguageComparison.Gui/release/Tcma.LanguageComparison.Gui-${{ github.event.inputs.version }}-portable.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
