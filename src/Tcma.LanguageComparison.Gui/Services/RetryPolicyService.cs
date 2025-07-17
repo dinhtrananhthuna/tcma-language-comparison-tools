@@ -4,10 +4,17 @@ using Tcma.LanguageComparison.Core.Models;
 
 namespace Tcma.LanguageComparison.Gui.Services;
 
+public interface IRetryPolicyService
+{
+    Task<OperationResult<T>> ExecuteWithRetryAsync<T>(Func<Task<OperationResult<T>>> operation, Func<ErrorInfo, bool>? isRetriable = null, IProgress<string>? progressCallback = null, string? context = null);
+    Task<OperationResult> ExecuteWithRetryAsync(Func<Task<OperationResult>> operation, Func<ErrorInfo, bool>? isRetriable = null, IProgress<string>? progressCallback = null, string? context = null);
+    Task<OperationResult<T>[]> ExecuteParallelWithRetryAsync<T>(Func<Task<OperationResult<T>>>[] operations, Func<ErrorInfo, bool>? isRetriable = null, IProgress<string>? progressCallback = null, string? context = null);
+}
+
 /// <summary>
 /// Service for handling retry policies for API calls and other operations
 /// </summary>
-public class RetryPolicyService
+public class RetryPolicyService : IRetryPolicyService
 {
     private readonly int _maxRetries;
     private readonly TimeSpan _baseDelay;

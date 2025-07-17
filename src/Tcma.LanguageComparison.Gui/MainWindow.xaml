@@ -70,13 +70,14 @@
                                      MinHeight="26"
                                      VerticalContentAlignment="Center"
                                      TextWrapping="NoWrap"
+                                     Text="{Binding ReferenceFilePath, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
                                      ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                             <Button x:Name="BrowseReferenceButton" 
                                     Grid.Column="2"
                                     Content="Browse" 
                                     Width="70"
                                     Height="26"
-                                    Click="BrowseReferenceButton_Click"/>
+                                    Command="{Binding BrowseReferenceCommand}"/>
                         </Grid>
                     </StackPanel>
 
@@ -99,13 +100,14 @@
                                      MinHeight="26"
                                      VerticalContentAlignment="Center"
                                      TextWrapping="NoWrap"
+                                     Text="{Binding TargetFilePath, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
                                      ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                             <Button x:Name="BrowseTargetButton" 
                                     Grid.Column="2"
                                     Content="Browse" 
                                     Width="70"
                                     Height="26"
-                                    Click="BrowseTargetButton_Click"/>
+                                    Command="{Binding BrowseTargetCommand}"/>
                         </Grid>
                     </StackPanel>
                 </Grid>
@@ -124,7 +126,7 @@
                             BorderBrush="#546E7A"
                             FontSize="11"
                             Margin="0,0,6,0"
-                            Click="SettingsButton_Click"/>
+                            Command="{Binding SettingsCommand}"/>
                     <Button x:Name="CompareButton"
                             Content="🔍 Compare"
                             MinWidth="90"
@@ -134,7 +136,7 @@
                             BorderBrush="#45A049"
                             FontSize="11"
                             Margin="6,0,6,0"
-                            Click="CompareButton_Click"/>
+                            Command="{Binding CompareCommand}"/>
                     <Button x:Name="ExportButton"
                             Content="💾 Export"
                             MinWidth="90"
@@ -144,8 +146,8 @@
                             BorderBrush="#F57C00"
                             FontSize="11"
                             Margin="6,0,0,0"
-                            IsEnabled="False"
-                            Click="ExportButton_Click"/>
+                            Command="{Binding ExportCommand}"
+                            IsEnabled="{Binding ExportCommand.CanExecute, RelativeSource={RelativeSource Self}}"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -178,7 +180,8 @@
                               EnableRowVirtualization="True"
                               EnableColumnVirtualization="True"
                               CanUserResizeColumns="True"
-                              CanUserSortColumns="True">
+                              CanUserSortColumns="True"
+                              ItemsSource="{Binding Results}">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Ref Line #" Binding="{Binding RefLineNumber}" Width="80" MinWidth="60"/>
                             <DataGridTextColumn Header="Reference Content" Binding="{Binding RefContent}" Width="300" MinWidth="200">
@@ -246,7 +249,7 @@
                                  IsIndeterminate="True"
                                  Visibility="Collapsed"/>
                     <TextBlock x:Name="StatusTextBlock" 
-                               Text="Ready" 
+                               Text="{Binding StatusMessage, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" 
                                Margin="10,0,0,0"
                                VerticalAlignment="Center"/>
                 </StackPanel>

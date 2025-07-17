@@ -6,6 +6,17 @@ using Tcma.LanguageComparison.Core.Models;
 
 namespace Tcma.LanguageComparison.Gui.Services;
 
+public interface ISettingsService
+{
+    double SimilarityThreshold { get; }
+    string ApiKey { get; }
+    int MaxEmbeddingBatchSize { get; }
+    event EventHandler<UserSettings>? SettingsChanged;
+    Task<OperationResult<UserSettings>> LoadSettingsAsync();
+    Task SaveSettingsAsync(double threshold, string apiKey, int maxEmbeddingBatchSize);
+    UserSettings GetCurrentSettings();
+}
+
 public class UserSettings
 {
     public double SimilarityThreshold { get; set; } = 0.5;
@@ -13,7 +24,7 @@ public class UserSettings
     public int MaxEmbeddingBatchSize { get; set; } = 50;
 }
 
-public class SettingsService
+public class SettingsService : ISettingsService
 {
     private static readonly string SettingsFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

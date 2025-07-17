@@ -9,10 +9,19 @@ using Tcma.LanguageComparison.Core.Models;
 
 namespace Tcma.LanguageComparison.Gui.Services;
 
+public interface IErrorHandlingService
+{
+    ErrorInfo ProcessException(Exception ex, string? context = null);
+    Task HandleErrorAsync(ErrorInfo error, bool showDialog = true);
+    Task<T?> HandleResultAsync<T>(OperationResult<T> result, bool showDialog = true);
+    Task<bool> TestNetworkConnectivityAsync();
+    string GetRecoveryGuidance(ErrorInfo error);
+}
+
 /// <summary>
 /// Centralized service for handling errors, logging, and user notifications
 /// </summary>
-public class ErrorHandlingService
+public class ErrorHandlingService : IErrorHandlingService
 {
     private readonly Action<string>? _statusUpdater;
     private readonly Action<string>? _progressUpdater;
