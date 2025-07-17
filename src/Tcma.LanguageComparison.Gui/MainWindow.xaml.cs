@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Tcma.LanguageComparison.Core.Models;
@@ -25,22 +24,12 @@ public partial class MainWindow : Window
     private string? _targetFilePath;
     private List<LineByLineMatchResult>? _comparisonResults;
     
-    // Multi-page mode properties
-    private string? _referenceZipPath;
-    private string? _targetZipPath;
-    private PageManagementService? _pageManagementService;
-    
     // Services
     private readonly SettingsService _settingsService;
     private readonly ErrorHandlingService _errorHandler;
     
     // UI Collections
     public ObservableCollection<AlignedDisplayRow> Results { get; } = new();
-    public ObservableCollection<PageInfo> Pages { get; } = new();
-
-    // Thêm biến cache cho multi-page mode
-    private readonly Dictionary<string, List<AlignedDisplayRow>> _multiPageResultsCache = new();
-    private PageInfo? _currentMultiPagePage = null;
 
     public MainWindow()
     {
@@ -48,8 +37,6 @@ public partial class MainWindow : Window
         
         // Bind UI collections
         ResultsDataGrid.ItemsSource = Results;
-        PageListView.ItemsSource = Pages;
-        MultiPageResultsDataGrid.ItemsSource = null;
         
         _settingsService = new SettingsService();
         
@@ -63,9 +50,6 @@ public partial class MainWindow : Window
         // Load settings and initialize UI
         Task.Run(InitializeAsync);
         
-        // Initialize UI visibility based on default tab (Single File Mode)
-        SingleFileResultsPanel.Visibility = Visibility.Visible;
-        
         // Handle window closing
         Closing += MainWindow_Closing;
     }
@@ -73,7 +57,6 @@ public partial class MainWindow : Window
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         // Clean up resources
-        _pageManagementService?.Dispose();
     }
 
     private async Task InitializeAsync()
@@ -444,296 +427,6 @@ public partial class MainWindow : Window
             : "";
             
         StatisticsTextBlock.Text = baseStats + targetStats;
-    }
-
-    #endregion
-
-    #region Multi-Page Mode Event Handlers
-
-    private void ProcessingModeTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        // Adjust layout based on selected tab
-        if (ProcessingModeTabControl.SelectedItem == SingleFileTab)
-        {
-            // Show comparison results for single file mode
-            SingleFileResultsPanel.Visibility = Visibility.Visible;
-        }
-        else if (ProcessingModeTabControl.SelectedItem == MultiPageTab && MultiPageTab.Visibility == Visibility.Visible)
-        {
-            // Hide comparison results for multi-page mode (has its own results panel)
-            SingleFileResultsPanel.Visibility = Visibility.Collapsed;
-            
-            // Initialize page management service when switching to multi-page mode
-            if (_pageManagementService == null)
-            {
-                InitializePageManagementService();
-            }
-        }
-    }
-
-    private void InitializePageManagementService()
-    {
-        try
-        {
-            var apiKey = _settingsService.ApiKey;
-            var threshold = _settingsService.SimilarityThreshold;
-            var translationService = new GeminiTranslationService(apiKey);
-            _pageManagementService?.Dispose();
-            _pageManagementService = new PageManagementService(threshold, apiKey, translationService);
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Failed to initialize page management: {ex.Message}");
-        }
-    }
-
-    private void BrowseReferenceZipButton_Click(object sender, RoutedEventArgs e)
-    {
-        var openFileDialog = new OpenFileDialog
-        {
-            Title = "Select Reference ZIP File",
-            Filter = "ZIP Files (*.zip)|*.zip|All Files (*.*)|*.*",
-            FilterIndex = 1
-        };
-
-        if (openFileDialog.ShowDialog() == true)
-        {
-            _referenceZipPath = openFileDialog.FileName;
-            ReferenceZipTextBox.Text = Path.GetFileName(_referenceZipPath);
-            UpdateLoadPagesButtonState();
-        }
-    }
-
-    private void BrowseTargetZipButton_Click(object sender, RoutedEventArgs e)
-    {
-        var openFileDialog = new OpenFileDialog
-        {
-            Title = "Select Target ZIP File",
-            Filter = "ZIP Files (*.zip)|*.zip|All Files (*.*)|*.*",
-            FilterIndex = 1
-        };
-
-        if (openFileDialog.ShowDialog() == true)
-        {
-            _targetZipPath = openFileDialog.FileName;
-            TargetZipTextBox.Text = Path.GetFileName(_targetZipPath);
-            UpdateLoadPagesButtonState();
-        }
-    }
-
-    private void UpdateLoadPagesButtonState()
-    {
-        LoadPagesButton.IsEnabled = !string.IsNullOrEmpty(_referenceZipPath) && 
-                                   !string.IsNullOrEmpty(_targetZipPath);
-    }
-
-    private async void LoadPagesButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_pageManagementService == null)
-        {
-            ShowStatus("Page management service not initialized");
-            return;
-        }
-
-        if (string.IsNullOrEmpty(_referenceZipPath) || string.IsNullOrEmpty(_targetZipPath))
-        {
-            ShowStatus("Please select both ZIP files");
-            return;
-        }
-
-        try
-        {
-            SetUIEnabled(false);
-            ShowProgress("Loading pages from ZIP files...");
-            Pages.Clear();
-
-            var result = await _pageManagementService.LoadPagesFromZipsAsync(_referenceZipPath, _targetZipPath);
-            
-            if (result.IsSuccess)
-            {
-                var extractionResult = result.Data!;
-                
-                foreach (var page in extractionResult.Pages)
-                {
-                    Pages.Add(page);
-                }
-
-                PagesStatusText.Text = extractionResult.Summary;
-                
-                if (extractionResult.UnpairedFiles.Any())
-                {
-                    ShowStatus($"Loaded {extractionResult.Pages.Count} pages. {extractionResult.UnpairedFiles.Count} files couldn't be paired.");
-                }
-                else
-                {
-                    ShowStatus($"Successfully loaded {extractionResult.Pages.Count} pages");
-                }
-            }
-            else
-            {
-                await _errorHandler.HandleErrorAsync(result.Error!);
-                PagesStatusText.Text = "Failed to load pages";
-            }
-        }
-        catch (Exception ex)
-        {
-            var error = _errorHandler.ProcessException(ex, "Loading pages from ZIP files");
-            await _errorHandler.HandleErrorAsync(error);
-        }
-        finally
-        {
-            SetUIEnabled(true);
-            HideProgress();
-        }
-    }
-
-    private async void ProcessPageButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_pageManagementService == null)
-        {
-            ShowStatus("Page management service not initialized");
-            return;
-        }
-
-        var button = (Button)sender;
-        var pageInfo = (PageInfo)button.Tag;
-
-        if (!pageInfo.CanProcess)
-        {
-            ShowStatus($"Page {pageInfo.PageName} cannot be processed in current state");
-            return;
-        }
-
-        try
-        {
-            // Update API key if needed
-            var apiKey = _settingsService.ApiKey;
-            if (string.IsNullOrEmpty(apiKey))
-            {
-                ShowStatus("Please configure API key in Settings");
-                return;
-            }
-
-            _pageManagementService.InitializeEmbeddingService(apiKey);
-
-            // Nếu đã có cache, chỉ cần load lại
-            if (_multiPageResultsCache.TryGetValue(pageInfo.PageName, out var cachedResults))
-            {
-                MultiPageResultsDataGrid.ItemsSource = cachedResults;
-                _currentMultiPagePage = pageInfo;
-                ShowStatus($"Loaded cached results for page: {pageInfo.PageName}");
-                return;
-            }
-
-            // Process the page
-            var progress = new Progress<string>(message => ShowProgress(message));
-            var result = await _pageManagementService.ProcessPageAsync(pageInfo, progress);
-
-            if (result.IsSuccess)
-            {
-                var pageResult = result.Data!;
-                
-                // Extract reference and target rows from the page results
-                var referenceRows = pageResult.Results
-                    .Where(r => r.CorrespondingReferenceRow != null)
-                    .Select(r => r.CorrespondingReferenceRow!)
-                    .Distinct()
-                    .ToList();
-                    
-                var targetRows = pageResult.Results
-                    .Select(r => r.TargetRow)
-                    .ToList();
-                
-                // Convert to aligned display data với original target và translation results
-                var alignedDisplayData = await ConvertToAlignedDisplayDataAsync(
-                    referenceRows, 
-                    targetRows, 
-                    pageResult.OriginalTargetRows, 
-                    pageResult.TranslationResults);
-                
-                _multiPageResultsCache[pageInfo.PageName] = alignedDisplayData;
-                MultiPageResultsDataGrid.ItemsSource = alignedDisplayData;
-                _currentMultiPagePage = pageInfo;
-                ShowStatus($"Successfully processed page: {pageInfo.PageName}");
-            }
-            else
-            {
-                await _errorHandler.HandleErrorAsync(result.Error!);
-            }
-        }
-        catch (Exception ex)
-        {
-            var error = _errorHandler.ProcessException(ex, $"Processing page {pageInfo.PageName}");
-            await _errorHandler.HandleErrorAsync(error);
-        }
-        finally
-        {
-            HideProgress();
-        }
-    }
-
-    private void PageListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        var selectedPage = PageListView.SelectedItem as PageInfo;
-        if (selectedPage != null && _multiPageResultsCache.TryGetValue(selectedPage.PageName, out var cachedResults))
-        {
-            MultiPageResultsDataGrid.ItemsSource = cachedResults;
-            _currentMultiPagePage = selectedPage;
-            ShowStatus($"Loaded cached results for page: {selectedPage.PageName}");
-        }
-    }
-
-    private void ClearCacheButton_Click(object sender, RoutedEventArgs e)
-    {
-        _pageManagementService?.ClearCache();
-        _multiPageResultsCache.Clear();
-        MultiPageResultsDataGrid.ItemsSource = null;
-        
-        // Update page statuses
-        foreach (var page in Pages)
-        {
-            if (page.Status == PageStatus.Cached || page.Status == PageStatus.Completed)
-            {
-                page.Status = PageStatus.Ready;
-                page.IsResultsCached = false;
-                page.Progress = 0;
-                page.ErrorMessage = null;
-            }
-        }
-
-        // Force refresh the ListView to update UI
-        PageListView.ItemsSource = null;
-        PageListView.ItemsSource = Pages;
-        
-        ShowStatus("Cache cleared");
-    }
-
-    private void RefreshPagesButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_pageManagementService != null)
-        {
-            foreach (var page in Pages)
-            {
-                _pageManagementService.UpdatePageStatus(page);
-            }
-        }
-        
-        ShowStatus("Page statuses refreshed");
-    }
-
-    // Xóa các hàm AddOrUpdateResultsTab, CreateResultsDataGrid, SwitchToResultsTab vì không còn dùng nữa
-
-    /// <summary>
-    /// Convert raw data to aligned display data using ContentMatchingService
-    /// </summary>
-    private async Task<List<AlignedDisplayRow>> ConvertToAlignedDisplayDataAsync(
-        List<ContentRow> referenceRows, 
-        List<ContentRow> targetRows,
-        List<ContentRow>? originalTargetRows = null,
-        List<TranslationResult>? translationResults = null)
-    {
-        var matchingService = new ContentMatchingService(_settingsService.SimilarityThreshold);
-        return await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translationResults);
     }
 
     #endregion

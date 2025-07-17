@@ -8,7 +8,7 @@ namespace Tcma.LanguageComparison.Gui.Services;
 
 public class UserSettings
 {
-    public double SimilarityThreshold { get; set; } = 5;
+    public double SimilarityThreshold { get; set; } = 0.5;
     public string ApiKey { get; set; } = string.Empty;
 }
 
