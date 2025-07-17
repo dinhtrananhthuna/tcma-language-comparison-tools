@@ -46,7 +46,7 @@ namespace Tcma.LanguageComparison.Core
                 // Initialize services
                 var csvService = new CsvReaderService();
                 var preprocessingService = new TextPreprocessingService();
-                var embeddingService = new GeminiEmbeddingService(apiKey);
+                var embeddingService = new GeminiEmbeddingService(apiKey, config.LanguageComparison.MaxEmbeddingBatchSize);
                 var matchingService = new ContentMatchingService(config.LanguageComparison.SimilarityThreshold);
 
                 // Create progress reporter

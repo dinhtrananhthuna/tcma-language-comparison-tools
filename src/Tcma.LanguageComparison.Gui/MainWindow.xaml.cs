@@ -152,7 +152,7 @@ public partial class MainWindow : Window
             // Initialize services
             var csvReader = new CsvReaderService();
             var configService = new ConfigurationService();
-            var geminiService = new GeminiEmbeddingService(_settingsService.ApiKey);
+            var geminiService = new GeminiEmbeddingService(_settingsService.ApiKey, _settingsService.MaxEmbeddingBatchSize);
             var preprocessingService = new TextPreprocessingService();
             var translationService = new GeminiTranslationService(_settingsService.ApiKey);
 

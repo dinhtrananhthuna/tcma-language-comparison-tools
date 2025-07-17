@@ -10,6 +10,7 @@ public class UserSettings
 {
     public double SimilarityThreshold { get; set; } = 0.5;
     public string ApiKey { get; set; } = string.Empty;
+    public int MaxEmbeddingBatchSize { get; set; } = 50;
 }
 
 public class SettingsService
@@ -24,6 +25,7 @@ public class SettingsService
 
     public double SimilarityThreshold => _settings.SimilarityThreshold;
     public string ApiKey => _settings.ApiKey;
+    public int MaxEmbeddingBatchSize => _settings.MaxEmbeddingBatchSize;
 
     public event EventHandler<UserSettings>? SettingsChanged;
 
@@ -50,10 +52,11 @@ public class SettingsService
         }
     }
 
-    public async Task SaveSettingsAsync(double threshold, string apiKey)
+    public async Task SaveSettingsAsync(double threshold, string apiKey, int maxEmbeddingBatchSize)
     {
         _settings.SimilarityThreshold = threshold;
         _settings.ApiKey = apiKey;
+        _settings.MaxEmbeddingBatchSize = maxEmbeddingBatchSize;
 
         try
         {
@@ -85,7 +88,8 @@ public class SettingsService
         return new UserSettings
         {
             SimilarityThreshold = _settings.SimilarityThreshold,
-            ApiKey = _settings.ApiKey
+            ApiKey = _settings.ApiKey,
+            MaxEmbeddingBatchSize = _settings.MaxEmbeddingBatchSize
         };
     }
 } 

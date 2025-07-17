@@ -28,6 +28,10 @@ public partial class SettingsWindow : Window
         ThresholdSlider.Value = settings.SimilarityThreshold;
         ThresholdValueTextBox.Text = settings.SimilarityThreshold.ToString("F2");
         
+        // Set batch size
+        BatchSizeSlider.Value = settings.MaxEmbeddingBatchSize;
+        BatchSizeValueTextBox.Text = settings.MaxEmbeddingBatchSize.ToString();
+        
         // Set API key
         if (!string.IsNullOrEmpty(settings.ApiKey))
         {
@@ -42,6 +46,14 @@ public partial class SettingsWindow : Window
         
         var value = Math.Round(e.NewValue, 2);
         ThresholdValueTextBox.Text = value.ToString("F2");
+    }
+
+    private void BatchSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isInitializing) return;
+        
+        var value = (int)Math.Round(e.NewValue);
+        BatchSizeValueTextBox.Text = value.ToString();
     }
 
     private void ApiKeyPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
@@ -85,6 +97,7 @@ public partial class SettingsWindow : Window
         try
         {
             var threshold = ThresholdSlider.Value;
+            var batchSize = (int)BatchSizeSlider.Value;
             var apiKey = ShowApiKeyCheckBox.IsChecked == true ? 
                          ApiKeyTextBox.Text : 
                          ApiKeyPasswordBox.Password;
@@ -93,6 +106,13 @@ public partial class SettingsWindow : Window
             if (threshold < 0.1 || threshold > 0.9)
             {
                 MessageBox.Show("Threshold must be between 0.1 and 0.9", "Invalid Threshold", 
+                                MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (batchSize < 10 || batchSize > 50)
+            {
+                MessageBox.Show("Batch size must be between 10 and 50", "Invalid Batch Size", 
                                 MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -113,7 +133,7 @@ public partial class SettingsWindow : Window
             SaveButton.IsEnabled = false;
             SaveButton.Content = "Saving...";
 
-            await _settingsService.SaveSettingsAsync(threshold, apiKey ?? string.Empty);
+            await _settingsService.SaveSettingsAsync(threshold, apiKey ?? string.Empty, batchSize);
 
             SettingsChanged = true;
             DialogResult = true;

@@ -27,7 +27,7 @@ namespace Tcma.LanguageComparison.Core
                 
                 // Services
                 var csvService = new CsvReaderService();
-                var geminiService = new GeminiEmbeddingService(geminiApiKey);
+                var geminiService = new GeminiEmbeddingService(geminiApiKey, 50);
                 var preprocessingService = new TextPreprocessingService();
                 var matchingService = new ContentMatchingService(0.35);
                 var translationService = new GeminiTranslationService(geminiApiKey);

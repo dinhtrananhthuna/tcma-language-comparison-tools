@@ -11,13 +11,15 @@ namespace Tcma.LanguageComparison.Core.Services
         private readonly GoogleAI _googleAI;
         private readonly GenerativeModel _model;
         private readonly SemaphoreSlim _semaphore;
+        private readonly int _maxEmbeddingBatchSize;
         private const int MaxConcurrentRequests = 5; // Limit concurrent API calls
 
         /// <summary>
         /// Initializes the Gemini embedding service
         /// </summary>
         /// <param name="apiKey">Google AI API key</param>
-        public GeminiEmbeddingService(string apiKey)
+        /// <param name="maxEmbeddingBatchSize">Maximum batch size for embedding requests</param>
+        public GeminiEmbeddingService(string apiKey, int maxEmbeddingBatchSize = 50)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
             {
@@ -27,6 +29,7 @@ namespace Tcma.LanguageComparison.Core.Services
             _googleAI = new GoogleAI(apiKey);
             _model = _googleAI.GenerativeModel(Model.TextEmbedding004);
             _semaphore = new SemaphoreSlim(MaxConcurrentRequests, MaxConcurrentRequests);
+            _maxEmbeddingBatchSize = maxEmbeddingBatchSize;
         }
 
         /// <summary>
@@ -206,8 +209,10 @@ namespace Tcma.LanguageComparison.Core.Services
             progressCallback?.Report($"Bắt đầu tạo embeddings cho {total} nội dung...");
 
             // Process in batches to avoid overwhelming the API
-            var batchSize = Math.Min(MaxConcurrentRequests, 10);
+            var batchSize = _maxEmbeddingBatchSize;
             var batches = validRows.Chunk(batchSize);
+            
+            progressCallback?.Report($"Sử dụng batch size: {batchSize} texts per batch");
 
             foreach (var batch in batches)
             {
@@ -234,7 +239,8 @@ namespace Tcma.LanguageComparison.Core.Services
                         }
                     }
 
-                    if (currentProgress % 10 == 0 || currentProgress == total)
+                    var reportInterval = Math.Max(1, _maxEmbeddingBatchSize / 5); // Report 5 times per batch
+                    if (currentProgress % reportInterval == 0 || currentProgress == total)
                     {
                         progressCallback?.Report($"Đã xử lý {currentProgress}/{total} nội dung (Thành công: {succeeded}, Lỗi: {failed})...");
                     }
