@@ -1,0 +1,60 @@
+# Conventional Commits Template for TCMA Language Comparison Tool
+# 
+# <type>[optional scope]: <description>
+# 
+# [optional body]
+# 
+# [optional footer(s)]
+# 
+# Types:
+#   feat     : A new feature
+#   fix      : A bug fix
+#   docs     : Documentation only changes
+#   style    : Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+#   refactor : A code change that neither fixes a bug nor adds a feature
+#   perf     : A code change that improves performance
+#   test     : Adding missing tests or correcting existing tests
+#   chore    : Changes to the build process or auxiliary tools and libraries such as documentation generation
+#   ci       : Changes to CI configuration files and scripts
+#   build    : Changes that affect the build system or external dependencies
+#   revert   : Reverts a previous commit
+#
+# Scopes (optional):
+#   core     : Core library changes
+#   gui      : GUI application changes
+#   api      : API service changes
+#   config   : Configuration changes
+#   test     : Test-related changes
+#   docs     : Documentation changes
+#   build    : Build system changes
+#
+# Examples:
+#   feat(core): add semantic similarity matching algorithm
+#   fix(gui): resolve memory leak in MainWindow
+#   docs: update README with installation instructions
+#   refactor(api): improve error handling in GeminiService
+#   test: add unit tests for ContentMatchingService
+#   chore: update dependencies to latest versions
+#
+# Breaking Changes:
+#   Use ! after type/scope to indicate breaking change
+#   Example: feat(core)!: change similarity threshold default value
+#
+# Footer:
+#   BREAKING CHANGE: <description>
+#   Closes #<issue-number>
+#   Fixes #<issue-number>
+#   Related to #<issue-number>
+#
+# Example with body and footer:
+#   feat(core): implement batch processing for large datasets
+#   
+#   This change introduces batch processing capabilities to handle large CSV files
+#   more efficiently by processing content in configurable batch sizes.
+#   
+#   - Add BatchProcessor class with configurable batch size
+#   - Implement progress reporting for batch operations
+#   - Add memory optimization for large file processing
+#   
+#   Closes #123
+#   Related to #124 

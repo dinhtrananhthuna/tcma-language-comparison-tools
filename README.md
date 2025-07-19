@@ -138,6 +138,26 @@ The application includes comprehensive error handling with:
 - HtmlAgilityPack for HTML tag removal
 - MSTest for unit testing
 
+## Contributing
+
+This project follows [Conventional Commits](https://www.conventionalcommits.org/) for commit messages. See [COMMIT_CONVENTIONS.md](COMMIT_CONVENTIONS.md) for detailed guidelines.
+
+### Quick Commit Guide
+
+```bash
+# Feature
+git commit -m "feat(core): add new matching algorithm"
+
+# Bug fix
+git commit -m "fix(gui): resolve memory leak in MainWindow"
+
+# Documentation
+git commit -m "docs: update API documentation"
+
+# Breaking change
+git commit -m "feat(core)!: change similarity threshold default"
+```
+
 ## License
 
 This project is proprietary software developed by Vu Dinh - Simplify Dalat.
