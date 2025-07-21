@@ -16,6 +16,7 @@ namespace Tcma.LanguageComparison.Core.Services
         private int _currentBatchSize;
         private DateTime _lastBatchTime;
         private double _averageResponseTime;
+        private readonly object _batchSizeLock = new object();
         private const int MaxConcurrentRequests = 5; // Limit concurrent API calls
 
         /// <summary>
@@ -44,24 +45,27 @@ namespace Tcma.LanguageComparison.Core.Services
         /// </summary>
         private void AdaptBatchSize(bool batchSuccessful, double batchDurationMs, int errorsInBatch, int batchSize)
         {
-            // Update average response time with exponential moving average
-            _averageResponseTime = 0.7 * _averageResponseTime + 0.3 * (batchDurationMs / batchSize);
+            lock (_batchSizeLock)
+            {
+                // Update average response time with exponential moving average
+                _averageResponseTime = 0.7 * _averageResponseTime + 0.3 * (batchDurationMs / batchSize);
 
-            // Calculate success rate for this batch
-            double successRate = (double)(batchSize - errorsInBatch) / batchSize;
+                // Calculate success rate for this batch
+                double successRate = (double)(batchSize - errorsInBatch) / batchSize;
 
-            // Adapt batch size based on performance
-            if (successRate > 0.9 && batchDurationMs < 3000) // High success, fast response
-            {
-                _currentBatchSize = Math.Min(_maxEmbeddingBatchSize, (int)(_currentBatchSize * 1.2));
-            }
-            else if (successRate < 0.7 || batchDurationMs > 10000) // Many errors or slow response
-            {
-                _currentBatchSize = Math.Max(5, (int)(_currentBatchSize * 0.7));
-            }
-            else if (batchDurationMs > 5000) // Moderate slowness
-            {
-                _currentBatchSize = Math.Max(5, (int)(_currentBatchSize * 0.9));
+                // Adapt batch size based on performance
+                if (successRate > 0.9 && batchDurationMs < 3000) // High success, fast response
+                {
+                    _currentBatchSize = Math.Min(_maxEmbeddingBatchSize, (int)(_currentBatchSize * 1.2));
+                }
+                else if (successRate < 0.7 || batchDurationMs > 10000) // Many errors or slow response
+                {
+                    _currentBatchSize = Math.Max(5, (int)(_currentBatchSize * 0.7));
+                }
+                else if (batchDurationMs > 5000) // Moderate slowness
+                {
+                    _currentBatchSize = Math.Max(5, (int)(_currentBatchSize * 0.9));
+                }
             }
         }
 
@@ -70,10 +74,26 @@ namespace Tcma.LanguageComparison.Core.Services
         /// </summary>
         private int GetAdaptiveDelay()
         {
-            // Shorter delays for smaller batches, longer for larger ones
-            int baseDelay = _averageResponseTime > 2000 ? 800 : 300;
-            double batchFactor = (double)_currentBatchSize / _maxEmbeddingBatchSize;
-            return (int)(baseDelay * (0.5 + 0.5 * batchFactor));
+            lock (_batchSizeLock)
+            {
+                // Shorter delays for smaller batches, longer for larger ones
+                int baseDelay = _averageResponseTime > 2000 ? 800 : 300;
+                double batchFactor = (double)_currentBatchSize / _maxEmbeddingBatchSize;
+                return (int)(baseDelay * (0.5 + 0.5 * batchFactor));
+            }
+        }
+
+        /// <summary>
+        /// Resets adaptive batch sizing state for a new comparison session
+        /// </summary>
+        public void ResetAdaptiveState()
+        {
+            lock (_batchSizeLock)
+            {
+                _currentBatchSize = Math.Max(5, _maxEmbeddingBatchSize / 4);
+                _lastBatchTime = DateTime.Now;
+                _averageResponseTime = 1000.0;
+            }
         }
 
         /// <summary>
@@ -256,16 +276,25 @@ namespace Tcma.LanguageComparison.Core.Services
             int remainingRows = validRows.Count;
             int startIndex = 0;
             
-            progressCallback?.Report($"Starting with adaptive batch size: {_currentBatchSize} (max: {_maxEmbeddingBatchSize})");
+            int initialBatchSize;
+            lock (_batchSizeLock)
+            {
+                initialBatchSize = _currentBatchSize;
+            }
+            progressCallback?.Report($"Starting with adaptive batch size: {initialBatchSize} (max: {_maxEmbeddingBatchSize})");
 
             while (startIndex < validRows.Count)
             {
                 // Determine current batch size (may be smaller for last batch)
-                int currentBatchSize = Math.Min(_currentBatchSize, remainingRows);
+                int currentBatchSize;
+                lock (_batchSizeLock)
+                {
+                    currentBatchSize = Math.Min(_currentBatchSize, remainingRows);
+                }
                 var batch = validRows.Skip(startIndex).Take(currentBatchSize).ToArray();
                 
                 var batchStartTime = DateTime.Now;
-                int batchErrors = 0;
+                var batchErrors = 0;
 
                 var batchTasks = batch.Select(async row =>
                 {
@@ -280,7 +309,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     else
                     {
                         Interlocked.Increment(ref failed);
-                        Interlocked.Increment(ref batchErrors);
+                        lock(errors) { batchErrors++; }
                         var errorMsg = $"ContentId {row.ContentId}: {result.Error?.UserMessage}";
                         lock (errors) { errors.Add(errorMsg); }
                         
@@ -294,7 +323,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     var reportInterval = Math.Max(1, _maxEmbeddingBatchSize / 5); // Report 5 times per batch
                     if (currentProgress % reportInterval == 0 || currentProgress == total)
                     {
-                        progressCallback?.Report($"Đã xử lý {currentProgress}/{total} nội dung (Thành công: {succeeded}, Lỗi: {failed}) [BatchSize: {_currentBatchSize}]");
+                        progressCallback?.Report($"Đã xử lý {currentProgress}/{total} nội dung (Thành công: {succeeded}, Lỗi: {failed}) [BatchSize: {currentBatchSize}]");
                     }
                 }).ToArray();
 

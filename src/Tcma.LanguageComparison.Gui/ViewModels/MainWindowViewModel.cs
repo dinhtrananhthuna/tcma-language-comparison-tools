@@ -7,6 +7,7 @@ using Microsoft.Win32;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using Tcma.LanguageComparison.Core.Services;
 
 namespace Tcma.LanguageComparison.Gui.ViewModels
 {
@@ -21,13 +22,26 @@ namespace Tcma.LanguageComparison.Gui.ViewModels
         [ObservableProperty]
         private string? targetFilePath;
         [ObservableProperty]
-        private ObservableCollection<AlignedDisplayRow> results = new();
-        partial void OnResultsChanged(ObservableCollection<AlignedDisplayRow> value)
+        private ObservableCollection<AlignedDisplayRow>? results = new();
+        private ObservableCollection<AlignedDisplayRow>? _oldResults;
+        
+        [ObservableProperty]
+        private bool isDataGridEnabled = true;
+        partial void OnResultsChanged(ObservableCollection<AlignedDisplayRow>? value)
         {
+            if (_oldResults != null)
+            {
+                _oldResults.CollectionChanged -= Results_CollectionChanged;
+            }
             if (value != null)
             {
-                value.CollectionChanged += (s, e) => ExportCommand.NotifyCanExecuteChanged();
+                value.CollectionChanged += Results_CollectionChanged;
             }
+            _oldResults = value;
+            ExportCommand.NotifyCanExecuteChanged();
+        }
+        private void Results_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
             ExportCommand.NotifyCanExecuteChanged();
         }
         [ObservableProperty]
@@ -161,8 +175,13 @@ namespace Tcma.LanguageComparison.Gui.ViewModels
             }
             try
             {
+                // Clear results at start of comparison
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    Results = null; // Disconnect collection for clean start
+                });
+
                 StatusMessage = "Loading files...";
-                Results.Clear();
                 var csvReader = new Core.Services.CsvReaderService();
                 var configService = new Core.Services.ConfigurationService();
                 var geminiService = new Core.Services.GeminiEmbeddingService(_settingsService.ApiKey, _settingsService.MaxEmbeddingBatchSize);
@@ -193,57 +212,123 @@ namespace Tcma.LanguageComparison.Gui.ViewModels
                 preprocessingService.ProcessContentRows(referenceRows);
                 preprocessingService.ProcessContentRows(targetRows);
 
+                // Reset embedding service state for new comparison
+                geminiService.ResetAdaptiveState();
+
                 // Start reference embeddings and translation in parallel
                 StatusMessage = "Starting embeddings and translation...";
-                var referenceEmbeddingsTask = geminiService.GenerateEmbeddingsAsync(referenceRows);
-                var translationTask = translationService.TranslateBatchAsync(targetRows, "auto", "en");
+                Task<OperationResult<EmbeddingProcessingStats>>? referenceEmbeddingsTask = null;
+                Task<OperationResult<List<TranslationResult>>>? translationTask = null;
+                Task<OperationResult<EmbeddingProcessingStats>>? targetEmbeddingsTask = null;
+                List<TranslationResult> translated = new List<TranslationResult>();
 
-                // Wait for translation to complete first (needed for target embeddings)
-                StatusMessage = "Translating target content...";
-                var translateResult = await translationTask;
-                if (!translateResult.IsSuccess)
+                try 
                 {
-                    StatusMessage = "Failed to translate target.";
-                    await _errorHandler.HandleErrorAsync(translateResult.Error!);
-                    return;
-                }
-                var translated = translateResult.Data!;
-                var translatedDict = translated.ToDictionary(t => t.ContentId, t => t.TranslatedContent);
-                for (int i = 0; i < targetRows.Count; i++)
-                {
-                    var row = targetRows[i];
-                    if (translatedDict.TryGetValue(row.ContentId, out var trans))
+                    referenceEmbeddingsTask = geminiService.GenerateEmbeddingsAsync(referenceRows);
+                    translationTask = translationService.TranslateBatchAsync(targetRows, "auto", "en");
+
+                    // Wait for translation to complete first (needed for target embeddings)
+                    StatusMessage = "Translating target content...";
+                    var translateResult = await translationTask;
+                    translationTask = null; // Mark as completed
+                    
+                    if (!translateResult.IsSuccess)
                     {
-                        targetRows[i] = row with { Content = trans };
+                        StatusMessage = "Failed to translate target.";
+                        await _errorHandler.HandleErrorAsync(translateResult.Error!);
+                        return;
                     }
+                    translated = translateResult.Data!;
+                    var translatedDict = translated.ToDictionary(t => t.ContentId, t => t.TranslatedContent);
+                    for (int i = 0; i < targetRows.Count; i++)
+                    {
+                        var row = targetRows[i];
+                        if (translatedDict.TryGetValue(row.ContentId, out var trans))
+                        {
+                            targetRows[i] = row with { Content = trans };
+                        }
+                    }
+                    preprocessingService.ProcessContentRows(targetRows);
+
+                    // Now start target embeddings in parallel with waiting for reference embeddings
+                    StatusMessage = "Generating embeddings for both reference and target...";
+                    targetEmbeddingsTask = geminiService.GenerateEmbeddingsAsync(targetRows);
+
+                    // Wait for reference embeddings
+                    var referenceEmbeddingsResult = await referenceEmbeddingsTask;
+                    referenceEmbeddingsTask = null; // Mark as completed
+                    if (!referenceEmbeddingsResult.IsSuccess) throw new Exception(referenceEmbeddingsResult.Error!.UserMessage);
+
+                    // Wait for target embeddings
+                    var targetEmbeddingsResult = await targetEmbeddingsTask;
+                    targetEmbeddingsTask = null; // Mark as completed
+                    if (!targetEmbeddingsResult.IsSuccess) throw new Exception(targetEmbeddingsResult.Error!.UserMessage);
                 }
-                preprocessingService.ProcessContentRows(targetRows);
-
-                // Now start target embeddings in parallel with waiting for reference embeddings
-                StatusMessage = "Generating embeddings for both reference and target...";
-                var targetEmbeddingsTask = geminiService.GenerateEmbeddingsAsync(targetRows);
-
-                // Wait for reference embeddings
-                var referenceEmbeddingsResult = await referenceEmbeddingsTask;
-                if (!referenceEmbeddingsResult.IsSuccess) throw new Exception(referenceEmbeddingsResult.Error!.UserMessage);
-
-                // Wait for target embeddings
-                var targetEmbeddingsResult = await targetEmbeddingsTask;
-                if (!targetEmbeddingsResult.IsSuccess) throw new Exception(targetEmbeddingsResult.Error!.UserMessage);
+                catch (Exception)
+                {
+                    // Cancel any remaining tasks
+                    if (referenceEmbeddingsTask != null && !referenceEmbeddingsTask.IsCompleted)
+                    {
+                        try { await referenceEmbeddingsTask; } catch { }
+                    }
+                    if (translationTask != null && !translationTask.IsCompleted)
+                    {
+                        try { await translationTask; } catch { }
+                    }
+                    if (targetEmbeddingsTask != null && !targetEmbeddingsTask.IsCompleted)
+                    {
+                        try { await targetEmbeddingsTask; } catch { }
+                    }
+                    throw;
+                }
 
                 StatusMessage = "Matching content...";
                 var matchingService = new Core.Services.ContentMatchingService(_settingsService.SimilarityThreshold);
+                // Ensure clean state for new comparison (cache is already cleared by new instance)
                 var alignedDisplayData = await matchingService.GenerateAlignedDisplayDataAsync(referenceRows, targetRows, originalTargetRows, translated);
 
-                Results.Clear();
+                // Create new collection OFF the UI thread to avoid any DataGrid interference
+                var newResults = new ObservableCollection<AlignedDisplayRow>();
                 foreach (var displayRow in alignedDisplayData)
                 {
-                    Results.Add(displayRow);
+                    newResults.Add(displayRow);
                 }
+                
+                // Safe collection update: disable DataGrid, update collection, re-enable
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    IsDataGridEnabled = false; // Prevent virtualization issues
+                });
+                
+                await Task.Delay(50); // Allow DataGrid to disable
+                
+                try
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        Results = newResults; // Update with new data
+                    });
+                }
+                finally
+                {
+                    // Always re-enable DataGrid, even if update fails
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        IsDataGridEnabled = true;
+                    });
+                    await Task.Delay(50); // Allow DataGrid to re-initialize
+                }
+                
                 StatusMessage = "Comparison completed successfully.";
             }
             catch (Exception ex)
             {
+                // Ensure DataGrid is re-enabled even if comparison fails
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    IsDataGridEnabled = true;
+                });
+                
                 StatusMessage = $"Error: {ex.Message}";
                 var error = _errorHandler.ProcessException(ex, "Comparing files");
                 await _errorHandler.HandleErrorAsync(error);

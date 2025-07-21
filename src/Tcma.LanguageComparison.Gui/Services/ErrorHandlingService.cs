@@ -16,6 +16,8 @@ public interface IErrorHandlingService
     Task<T?> HandleResultAsync<T>(OperationResult<T> result, bool showDialog = true);
     Task<bool> TestNetworkConnectivityAsync();
     string GetRecoveryGuidance(ErrorInfo error);
+    void LogDebug(string message, string? context = null);
+    void LogInfo(string message, string? context = null);
 }
 
 /// <summary>
@@ -26,6 +28,10 @@ public class ErrorHandlingService : IErrorHandlingService
     private readonly Action<string>? _statusUpdater;
     private readonly Action<string>? _progressUpdater;
     private readonly Action? _hideProgress;
+
+    private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TcmaLanguageComparison");
+    private static readonly string LogFilePath = Path.Combine(LogDirectory, "log.txt");
+    private const long MaxLogFileSizeBytes = 5 * 1024 * 1024; // 5MB
 
     public ErrorHandlingService(
         Action<string>? statusUpdater = null,
@@ -265,23 +271,92 @@ public class ErrorHandlingService : IErrorHandlingService
 
     private async Task LogErrorAsync(ErrorInfo error)
     {
-        // Simple console logging for now - could be extended to file logging
         await Task.Run(() =>
         {
             var logMessage = $"[{error.Timestamp:yyyy-MM-dd HH:mm:ss}] " +
                            $"{error.Severity} - {error.Category}: {error.UserMessage}";
-            
             if (!string.IsNullOrEmpty(error.TechnicalDetails))
             {
                 logMessage += $"\nDetails: {error.TechnicalDetails}";
             }
-            
             if (!string.IsNullOrEmpty(error.ContextInfo))
             {
                 logMessage += $"\nContext: {error.ContextInfo}";
             }
+            logMessage += "\n";
 
+            // Log to console
             Console.WriteLine(logMessage);
+
+            // Log to file (thread-safe, append)
+            try
+            {
+                if (!Directory.Exists(LogDirectory))
+                {
+                    Directory.CreateDirectory(LogDirectory);
+                }
+                lock (LogFilePath)
+                {
+                    RotateLogFileIfNeeded();
+                    File.AppendAllText(LogFilePath, logMessage);
+                }
+            }
+            catch (Exception fileEx)
+            {
+                // Nếu log file lỗi, vẫn không làm crash app
+                Console.WriteLine($"[LoggingError] {fileEx.Message}");
+            }
         });
+    }
+
+    public void LogDebug(string message, string? context = null)
+    {
+        LogToFile("DEBUG", message, context);
+    }
+
+    public void LogInfo(string message, string? context = null)
+    {
+        LogToFile("INFO", message, context);
+    }
+
+    private void LogToFile(string level, string message, string? context)
+    {
+        var logMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {level}: {message}";
+        if (!string.IsNullOrEmpty(context))
+        {
+            logMessage += $"\nContext: {context}";
+        }
+        logMessage += "\n";
+        Console.WriteLine(logMessage);
+        try
+        {
+            if (!Directory.Exists(LogDirectory))
+            {
+                Directory.CreateDirectory(LogDirectory);
+            }
+            lock (LogFilePath)
+            {
+                RotateLogFileIfNeeded();
+                File.AppendAllText(LogFilePath, logMessage);
+            }
+        }
+        catch (Exception fileEx)
+        {
+            Console.WriteLine($"[LoggingError] {fileEx.Message}");
+        }
+    }
+
+    private void RotateLogFileIfNeeded()
+    {
+        if (File.Exists(LogFilePath))
+        {
+            var fileInfo = new FileInfo(LogFilePath);
+            if (fileInfo.Length >= MaxLogFileSizeBytes)
+            {
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var archivePath = Path.Combine(LogDirectory, $"log_{timestamp}.txt");
+                File.Move(LogFilePath, archivePath);
+            }
+        }
     }
 } 
