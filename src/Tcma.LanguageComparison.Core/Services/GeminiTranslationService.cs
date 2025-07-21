@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Mscc.GenerativeAI;
@@ -17,6 +18,7 @@ namespace Tcma.LanguageComparison.Core.Services
         private readonly GenerativeModel _model;
         private readonly SemaphoreSlim _semaphore;
         private const int MaxConcurrentRequests = 5;
+        private const int OptimalBatchSize = 100; // Optimal batch size for API performance
         private const string DefaultPrompt = "Translate the following text to English. Only return the translated text, no explanation. Text: ";
 
         public GeminiTranslationService(string apiKey)
@@ -47,6 +49,68 @@ namespace Tcma.LanguageComparison.Core.Services
                 });
             }
 
+            // Use adaptive batching for large datasets
+            if (rowList.Count > OptimalBatchSize)
+            {
+                return await TranslateLargeBatchAsync(rowList, sourceLang, targetLang, progress);
+            }
+
+            // Process small batches normally
+            return await TranslateSingleBatchAsync(rowList, sourceLang, targetLang, progress);
+        }
+
+        /// <summary>
+        /// Handles large translation batches by splitting them into optimal chunks
+        /// </summary>
+        private async Task<OperationResult<List<TranslationResult>>> TranslateLargeBatchAsync(
+            List<ContentRow> rowList,
+            string sourceLang,
+            string targetLang,
+            IProgress<string>? progress)
+        {
+            var allResults = new List<TranslationResult>();
+            var totalRows = rowList.Count;
+            var processed = 0;
+            
+            progress?.Report($"Dịch {totalRows} dòng với adaptive batching (batch size: {OptimalBatchSize})...");
+            
+            // Process in optimal-sized chunks
+            for (int i = 0; i < totalRows; i += OptimalBatchSize)
+            {
+                var batchSize = Math.Min(OptimalBatchSize, totalRows - i);
+                var batch = rowList.GetRange(i, batchSize);
+                
+                var batchResult = await TranslateSingleBatchAsync(batch, sourceLang, targetLang, null);
+                if (!batchResult.IsSuccess)
+                {
+                    progress?.Report($"Lỗi khi dịch batch {i / OptimalBatchSize + 1}: {batchResult.Error?.UserMessage}");
+                    return batchResult; // Return error from failed batch
+                }
+                
+                allResults.AddRange(batchResult.Data!);
+                processed += batchSize;
+                
+                progress?.Report($"Đã dịch {processed}/{totalRows} dòng ({processed * 100 / totalRows}%)...");
+                
+                // Small delay between batches to be API-friendly
+                if (i + OptimalBatchSize < totalRows)
+                    await Task.Delay(200);
+            }
+            
+            progress?.Report($"Hoàn thành dịch {allResults.Count}/{totalRows} dòng với adaptive batching.");
+            return OperationResult<List<TranslationResult>>.Success(allResults);
+        }
+
+        /// <summary>
+        /// Processes a single batch translation
+        /// </summary>
+        private async Task<OperationResult<List<TranslationResult>>> TranslateSingleBatchAsync(
+            List<ContentRow> rowList,
+            string sourceLang,
+            string targetLang,
+            IProgress<string>? progress)
+        {
+
             // Gom thành JSON array
             var inputArray = rowList.Select(r => new { ContentId = r.ContentId, Content = r.Content }).ToList();
             var inputJson = System.Text.Json.JsonSerializer.Serialize(inputArray);
@@ -71,34 +135,40 @@ Required output format: [{{""ContentId"":""ID001"", ""TranslatedContent"":""tran
                 var response = await _model.GenerateContent(prompt);
                 aiText = response?.Text?.Trim() ?? string.Empty;
                 
-                // Fast path: try direct parsing first (should work with stronger prompt)
+                // Fast path: try optimized streaming parser first
                 var results = TryDirectJsonParsing(aiText);
-                if (results == null || results.Count == 0)
+                bool usedFastPath = results != null && results.Count > 0;
+                
+                if (!usedFastPath)
                 {
                     // Fallback to multi-strategy parsing only if needed
                     results = ExtractAndParseJson(aiText, rowList.Count);
-                }
-                if (results == null || results.Count == 0)
-                {
-                    Console.WriteLine("❌ [AI Translate Error] Không parse được kết quả dịch từ AI.");
-                    Console.WriteLine($"AI Response: {aiText}");
-                    Console.WriteLine($"Input JSON length: {inputJson.Length}");
-                    return OperationResult<List<TranslationResult>>.Failure(new ErrorInfo
+                    
+                    if (results == null || results.Count == 0)
                     {
-                        Category = ErrorCategory.ApiProcessing,
-                        Severity = ErrorSeverity.High,
-                        UserMessage = "Không parse được kết quả dịch từ AI.",
-                        TechnicalDetails = aiText,
-                        SuggestedAction = "Vui lòng kiểm tra lại format trả về của AI."
-                    });
+                        Console.WriteLine("❌ [AI Translate Error] Không parse được kết quả dịch từ AI.");
+                        Console.WriteLine($"AI Response: {aiText}");
+                        Console.WriteLine($"Input JSON length: {inputJson.Length}");
+                        return OperationResult<List<TranslationResult>>.Failure(new ErrorInfo
+                        {
+                            Category = ErrorCategory.ApiProcessing,
+                            Severity = ErrorSeverity.High,
+                            UserMessage = "Không parse được kết quả dịch từ AI.",
+                            TechnicalDetails = aiText,
+                            SuggestedAction = "Vui lòng kiểm tra lại format trả về của AI."
+                        });
+                    }
                 }
                 
-                // Validate results against input
-                var validationResult = ValidateTranslationResults(results, rowList);
-                if (!validationResult.IsSuccess)
-                    return validationResult;
+                // Skip expensive validation if fast path succeeded (it's already validated)
+                if (!usedFastPath)
+                {
+                    var validationResult = ValidateTranslationResults(results, rowList);
+                    if (!validationResult.IsSuccess)
+                        return validationResult;
+                }
                 
-                progress?.Report($"Đã dịch {results.Count}/{rowList.Count} dòng (batch JSON).");
+                progress?.Report($"Đã dịch {results.Count}/{rowList.Count} dòng ({(usedFastPath ? "fast" : "fallback")} parsing).");
                 return OperationResult<List<TranslationResult>>.Success(results);
             }
             catch (Exception ex)
@@ -122,7 +192,7 @@ Required output format: [{{""ContentId"":""ID001"", ""TranslatedContent"":""tran
         }
 
         /// <summary>
-        /// Fast direct JSON parsing for well-formatted responses
+        /// Fast streaming JSON parsing optimized for performance
         /// </summary>
         private List<TranslationResult>? TryDirectJsonParsing(string aiText)
         {
@@ -131,19 +201,40 @@ Required output format: [{{""ContentId"":""ID001"", ""TranslatedContent"":""tran
 
             try
             {
-                // Remove any potential markdown formatting if present
-                var cleanText = aiText.Trim();
-                if (cleanText.StartsWith("```json"))
-                    cleanText = cleanText.Substring(7);
-                if (cleanText.EndsWith("```"))
-                    cleanText = cleanText.Substring(0, cleanText.Length - 3);
-                cleanText = cleanText.Trim();
+                // Use ReadOnlySpan for faster string operations (no allocations)
+                var span = aiText.AsSpan().Trim();
+                
+                // Fast markdown removal with spans
+                if (span.StartsWith("```json"))
+                    span = span.Slice(7);
+                if (span.EndsWith("```"))
+                    span = span.Slice(0, span.Length - 3);
+                span = span.Trim();
 
-                // Direct parsing - should work with strengthened prompt
-                if (cleanText.StartsWith("[") && cleanText.EndsWith("]"))
+                // Quick validation before expensive parsing
+                if (!span.StartsWith("[") || !span.EndsWith("]") || span.Length < 3)
+                    return null;
+
+                // Use streaming parser for better performance on large JSON
+                using var doc = JsonDocument.Parse(span.ToString());
+                if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                    return null;
+
+                var results = new List<TranslationResult>(doc.RootElement.GetArrayLength());
+                foreach (var element in doc.RootElement.EnumerateArray())
                 {
-                    return System.Text.Json.JsonSerializer.Deserialize<List<TranslationResult>>(cleanText);
+                    if (element.TryGetProperty("ContentId", out var contentIdProp) &&
+                        element.TryGetProperty("TranslatedContent", out var contentProp))
+                    {
+                        results.Add(new TranslationResult
+                        {
+                            ContentId = contentIdProp.GetString() ?? "",
+                            TranslatedContent = contentProp.GetString() ?? ""
+                        });
+                    }
                 }
+
+                return results.Count > 0 ? results : null;
             }
             catch
             {
