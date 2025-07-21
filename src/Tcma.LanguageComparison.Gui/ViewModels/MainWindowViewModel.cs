@@ -193,12 +193,14 @@ namespace Tcma.LanguageComparison.Gui.ViewModels
                 preprocessingService.ProcessContentRows(referenceRows);
                 preprocessingService.ProcessContentRows(targetRows);
 
-                StatusMessage = "Generating embeddings for reference...";
-                var referenceEmbeddingsResult = await geminiService.GenerateEmbeddingsAsync(referenceRows);
-                if (!referenceEmbeddingsResult.IsSuccess) throw new Exception(referenceEmbeddingsResult.Error!.UserMessage);
+                // Start reference embeddings and translation in parallel
+                StatusMessage = "Starting embeddings and translation...";
+                var referenceEmbeddingsTask = geminiService.GenerateEmbeddingsAsync(referenceRows);
+                var translationTask = translationService.TranslateBatchAsync(targetRows, "auto", "en");
 
+                // Wait for translation to complete first (needed for target embeddings)
                 StatusMessage = "Translating target content...";
-                var translateResult = await translationService.TranslateBatchAsync(targetRows, "auto", "en");
+                var translateResult = await translationTask;
                 if (!translateResult.IsSuccess)
                 {
                     StatusMessage = "Failed to translate target.";
@@ -217,8 +219,16 @@ namespace Tcma.LanguageComparison.Gui.ViewModels
                 }
                 preprocessingService.ProcessContentRows(targetRows);
 
-                StatusMessage = "Generating embeddings for target...";
-                var targetEmbeddingsResult = await geminiService.GenerateEmbeddingsAsync(targetRows);
+                // Now start target embeddings in parallel with waiting for reference embeddings
+                StatusMessage = "Generating embeddings for both reference and target...";
+                var targetEmbeddingsTask = geminiService.GenerateEmbeddingsAsync(targetRows);
+
+                // Wait for reference embeddings
+                var referenceEmbeddingsResult = await referenceEmbeddingsTask;
+                if (!referenceEmbeddingsResult.IsSuccess) throw new Exception(referenceEmbeddingsResult.Error!.UserMessage);
+
+                // Wait for target embeddings
+                var targetEmbeddingsResult = await targetEmbeddingsTask;
                 if (!targetEmbeddingsResult.IsSuccess) throw new Exception(targetEmbeddingsResult.Error!.UserMessage);
 
                 StatusMessage = "Matching content...";

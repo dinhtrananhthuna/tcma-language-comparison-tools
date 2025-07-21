@@ -1,5 +1,6 @@
 using Mscc.GenerativeAI;
 using Tcma.LanguageComparison.Core.Models;
+using System.Numerics;
 
 namespace Tcma.LanguageComparison.Core.Services
 {
@@ -12,6 +13,9 @@ namespace Tcma.LanguageComparison.Core.Services
         private readonly GenerativeModel _model;
         private readonly SemaphoreSlim _semaphore;
         private readonly int _maxEmbeddingBatchSize;
+        private int _currentBatchSize;
+        private DateTime _lastBatchTime;
+        private double _averageResponseTime;
         private const int MaxConcurrentRequests = 5; // Limit concurrent API calls
 
         /// <summary>
@@ -30,6 +34,46 @@ namespace Tcma.LanguageComparison.Core.Services
             _model = _googleAI.GenerativeModel(Model.TextEmbedding004);
             _semaphore = new SemaphoreSlim(MaxConcurrentRequests, MaxConcurrentRequests);
             _maxEmbeddingBatchSize = maxEmbeddingBatchSize;
+            _currentBatchSize = Math.Max(5, maxEmbeddingBatchSize / 4); // Start with 25% of max
+            _lastBatchTime = DateTime.Now;
+            _averageResponseTime = 1000.0; // Start with 1 second estimate
+        }
+
+        /// <summary>
+        /// Adapts batch size based on API performance and error rates
+        /// </summary>
+        private void AdaptBatchSize(bool batchSuccessful, double batchDurationMs, int errorsInBatch, int batchSize)
+        {
+            // Update average response time with exponential moving average
+            _averageResponseTime = 0.7 * _averageResponseTime + 0.3 * (batchDurationMs / batchSize);
+
+            // Calculate success rate for this batch
+            double successRate = (double)(batchSize - errorsInBatch) / batchSize;
+
+            // Adapt batch size based on performance
+            if (successRate > 0.9 && batchDurationMs < 3000) // High success, fast response
+            {
+                _currentBatchSize = Math.Min(_maxEmbeddingBatchSize, (int)(_currentBatchSize * 1.2));
+            }
+            else if (successRate < 0.7 || batchDurationMs > 10000) // Many errors or slow response
+            {
+                _currentBatchSize = Math.Max(5, (int)(_currentBatchSize * 0.7));
+            }
+            else if (batchDurationMs > 5000) // Moderate slowness
+            {
+                _currentBatchSize = Math.Max(5, (int)(_currentBatchSize * 0.9));
+            }
+        }
+
+        /// <summary>
+        /// Gets optimal delay between batches based on current performance
+        /// </summary>
+        private int GetAdaptiveDelay()
+        {
+            // Shorter delays for smaller batches, longer for larger ones
+            int baseDelay = _averageResponseTime > 2000 ? 800 : 300;
+            double batchFactor = (double)_currentBatchSize / _maxEmbeddingBatchSize;
+            return (int)(baseDelay * (0.5 + 0.5 * batchFactor));
         }
 
         /// <summary>
@@ -208,14 +252,21 @@ namespace Tcma.LanguageComparison.Core.Services
 
             progressCallback?.Report($"Bắt đầu tạo embeddings cho {total} nội dung...");
 
-            // Process in batches to avoid overwhelming the API
-            var batchSize = _maxEmbeddingBatchSize;
-            var batches = validRows.Chunk(batchSize);
+            // Process in adaptive batches to optimize API performance
+            int remainingRows = validRows.Count;
+            int startIndex = 0;
             
-            progressCallback?.Report($"Sử dụng batch size: {batchSize} texts per batch");
+            progressCallback?.Report($"Starting with adaptive batch size: {_currentBatchSize} (max: {_maxEmbeddingBatchSize})");
 
-            foreach (var batch in batches)
+            while (startIndex < validRows.Count)
             {
+                // Determine current batch size (may be smaller for last batch)
+                int currentBatchSize = Math.Min(_currentBatchSize, remainingRows);
+                var batch = validRows.Skip(startIndex).Take(currentBatchSize).ToArray();
+                
+                var batchStartTime = DateTime.Now;
+                int batchErrors = 0;
+
                 var batchTasks = batch.Select(async row =>
                 {
                     var result = await GetEmbeddingAsync(row.CleanContent, maxRetries);
@@ -229,6 +280,7 @@ namespace Tcma.LanguageComparison.Core.Services
                     else
                     {
                         Interlocked.Increment(ref failed);
+                        Interlocked.Increment(ref batchErrors);
                         var errorMsg = $"ContentId {row.ContentId}: {result.Error?.UserMessage}";
                         lock (errors) { errors.Add(errorMsg); }
                         
@@ -242,16 +294,24 @@ namespace Tcma.LanguageComparison.Core.Services
                     var reportInterval = Math.Max(1, _maxEmbeddingBatchSize / 5); // Report 5 times per batch
                     if (currentProgress % reportInterval == 0 || currentProgress == total)
                     {
-                        progressCallback?.Report($"Đã xử lý {currentProgress}/{total} nội dung (Thành công: {succeeded}, Lỗi: {failed})...");
+                        progressCallback?.Report($"Đã xử lý {currentProgress}/{total} nội dung (Thành công: {succeeded}, Lỗi: {failed}) [BatchSize: {_currentBatchSize}]");
                     }
                 }).ToArray();
 
                 await Task.WhenAll(batchTasks);
 
-                // Add a small delay between batches to respect rate limits
-                if (batchSize > 1)
+                // Measure batch performance and adapt
+                var batchDuration = (DateTime.Now - batchStartTime).TotalMilliseconds;
+                AdaptBatchSize(batchErrors == 0, batchDuration, batchErrors, currentBatchSize);
+
+                startIndex += currentBatchSize;
+                remainingRows -= currentBatchSize;
+
+                // Add adaptive delay between batches
+                if (remainingRows > 0)
                 {
-                    await Task.Delay(500);
+                    var delay = GetAdaptiveDelay();
+                    await Task.Delay(delay);
                 }
             }
 
@@ -420,11 +480,34 @@ namespace Tcma.LanguageComparison.Core.Services
                 throw new ArgumentException("Vectors must have the same length");
             }
 
+            if (vector1.Length == 0)
+                return 0.0;
+
+            // Use vectorized operations for better performance
+            var span1 = vector1.AsSpan();
+            var span2 = vector2.AsSpan();
+            
             double dotProduct = 0.0;
             double magnitude1 = 0.0;
             double magnitude2 = 0.0;
 
-            for (int i = 0; i < vector1.Length; i++)
+            // Process in chunks that fit SIMD registers (Vector<float>.Count elements at a time)
+            int vectorSize = Vector<float>.Count;
+            int i = 0;
+            
+            // Vectorized processing for bulk of the data
+            for (; i <= vector1.Length - vectorSize; i += vectorSize)
+            {
+                var v1 = new Vector<float>(span1.Slice(i, vectorSize));
+                var v2 = new Vector<float>(span2.Slice(i, vectorSize));
+                
+                dotProduct += Vector.Dot(v1, v2);
+                magnitude1 += Vector.Dot(v1, v1);
+                magnitude2 += Vector.Dot(v2, v2);
+            }
+            
+            // Handle remaining elements
+            for (; i < vector1.Length; i++)
             {
                 dotProduct += vector1[i] * vector2[i];
                 magnitude1 += vector1[i] * vector1[i];

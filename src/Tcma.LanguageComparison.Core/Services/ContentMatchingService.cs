@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ namespace Tcma.LanguageComparison.Core.Services
     public class ContentMatchingService
     {
         private readonly double _similarityThreshold;
+        private readonly ConcurrentDictionary<string, double> _similarityCache;
+        private readonly object _matrixLock = new object();
 
         /// <summary>
         /// Initializes the content matching service
@@ -26,6 +29,32 @@ namespace Tcma.LanguageComparison.Core.Services
             }
 
             _similarityThreshold = similarityThreshold;
+            _similarityCache = new ConcurrentDictionary<string, double>();
+        }
+
+        /// <summary>
+        /// Calculates cosine similarity with caching to avoid redundant calculations
+        /// </summary>
+        private double GetCachedSimilarity(ContentRow row1, ContentRow row2)
+        {
+            if (row1.EmbeddingVector == null || row2.EmbeddingVector == null)
+                return 0.0;
+
+            // Create deterministic cache key (order independent)
+            string key = string.Compare(row1.ContentId, row2.ContentId, StringComparison.Ordinal) < 0 
+                ? $"{row1.ContentId}|{row2.ContentId}" 
+                : $"{row2.ContentId}|{row1.ContentId}";
+
+            return _similarityCache.GetOrAdd(key, _ => 
+                GeminiEmbeddingService.CalculateCosineSimilarity(row1.EmbeddingVector, row2.EmbeddingVector));
+        }
+
+        /// <summary>
+        /// Clears the similarity cache (useful for memory management)
+        /// </summary>
+        public void ClearSimilarityCache()
+        {
+            _similarityCache.Clear();
         }
 
         /// <summary>
@@ -229,9 +258,7 @@ namespace Tcma.LanguageComparison.Core.Services
                         continue;
                     }
 
-                    var lineScore = GeminiEmbeddingService.CalculateCosineSimilarity(
-                        refRow.EmbeddingVector,
-                        targetRow.EmbeddingVector);
+                    var lineScore = GetCachedSimilarity(refRow, targetRow);
 
                     bool isGood = lineScore >= _similarityThreshold;
 
@@ -316,9 +343,7 @@ namespace Tcma.LanguageComparison.Core.Services
             {
                 for (int j = 0; j < targetWithEmbeddings.Count; j++)
                 {
-                    similarityMatrix[i, j] = GeminiEmbeddingService.CalculateCosineSimilarity(
-                        refWithEmbeddings[i].EmbeddingVector!, 
-                        targetWithEmbeddings[j].EmbeddingVector!);
+                    similarityMatrix[i, j] = GetCachedSimilarity(refWithEmbeddings[i], targetWithEmbeddings[j]);
                 }
             }
 
@@ -427,9 +452,7 @@ namespace Tcma.LanguageComparison.Core.Services
                 if (usedTargetRows.Contains(targetRow.OriginalIndex) || targetRow.EmbeddingVector == null)
                     continue;
 
-                var similarity = GeminiEmbeddingService.CalculateCosineSimilarity(
-                    referenceRow.EmbeddingVector,
-                    targetRow.EmbeddingVector);
+                var similarity = GetCachedSimilarity(referenceRow, targetRow);
 
                 if (similarity > bestSimilarity)
                 {

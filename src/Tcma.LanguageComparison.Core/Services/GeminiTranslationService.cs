@@ -52,18 +52,32 @@ namespace Tcma.LanguageComparison.Core.Services
             var inputJson = System.Text.Json.JsonSerializer.Serialize(inputArray);
 
             // Prompt yêu cầu AI trả về JSON array mapping ContentId → TranslatedContent
-            var prompt = $@"You are a professional translator. Translate the following JSON array from {sourceLang} to {targetLang}.
-Return a JSON array with the same ContentId and the translated English in TranslatedContent.
+            var prompt = $@"CRITICAL INSTRUCTIONS: You are a professional translator. You MUST follow these rules EXACTLY:
+
+1. Translate the following JSON array from {sourceLang} to {targetLang}
+2. Return ONLY valid JSON array, no explanations, no markdown code blocks, no extra text
+3. Each object must have EXACTLY these fields: ""ContentId"" and ""TranslatedContent""
+4. Preserve ALL ContentId values exactly as provided
+5. Start response with [ and end with ]
+6. Do NOT add ```json or any formatting
+
 Input: {inputJson}
-Output format example: [{{""ContentId"":""..."", ""TranslatedContent"":""...""}}, ...]";
+
+Required output format: [{{""ContentId"":""ID001"", ""TranslatedContent"":""translated text""}}, {{""ContentId"":""ID002"", ""TranslatedContent"":""translated text""}}]";
 
             string aiText = string.Empty;
             try
             {
                 var response = await _model.GenerateContent(prompt);
                 aiText = response?.Text?.Trim() ?? string.Empty;
-                // Thử nhiều cách trích xuất JSON
-                var results = ExtractAndParseJson(aiText, rowList.Count);
+                
+                // Fast path: try direct parsing first (should work with stronger prompt)
+                var results = TryDirectJsonParsing(aiText);
+                if (results == null || results.Count == 0)
+                {
+                    // Fallback to multi-strategy parsing only if needed
+                    results = ExtractAndParseJson(aiText, rowList.Count);
+                }
                 if (results == null || results.Count == 0)
                 {
                     Console.WriteLine("❌ [AI Translate Error] Không parse được kết quả dịch từ AI.");
@@ -105,6 +119,37 @@ Output format example: [{{""ContentId"":""..."", ""TranslatedContent"":""...""}}
                     OriginalException = ex
                 });
             }
+        }
+
+        /// <summary>
+        /// Fast direct JSON parsing for well-formatted responses
+        /// </summary>
+        private List<TranslationResult>? TryDirectJsonParsing(string aiText)
+        {
+            if (string.IsNullOrWhiteSpace(aiText))
+                return null;
+
+            try
+            {
+                // Remove any potential markdown formatting if present
+                var cleanText = aiText.Trim();
+                if (cleanText.StartsWith("```json"))
+                    cleanText = cleanText.Substring(7);
+                if (cleanText.EndsWith("```"))
+                    cleanText = cleanText.Substring(0, cleanText.Length - 3);
+                cleanText = cleanText.Trim();
+
+                // Direct parsing - should work with strengthened prompt
+                if (cleanText.StartsWith("[") && cleanText.EndsWith("]"))
+                {
+                    return System.Text.Json.JsonSerializer.Deserialize<List<TranslationResult>>(cleanText);
+                }
+            }
+            catch
+            {
+                // Silent fail, will try fallback methods
+            }
+            return null;
         }
 
         /// <summary>
